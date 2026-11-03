@@ -1,0 +1,26 @@
+{
+  "game": "poker",
+  "obs_version": 1,
+  "updated_at": "2026-11-02T21:49:03",
+  "algorithm": "cfr",
+  "profile": "full",
+  "timesteps": 1428168,
+  "seed": 0,
+  "deterministic": false,
+  "validation": {
+    "metric": "bb_per_100",
+    "value": 25.8875,
+    "ci95": 55.86535201354837,
+    "mean_return": 0.00258875,
+    "episodes": 4000,
+    "deals": 2000,
+    "higher_is_better": true
+  },
+  "reference": null,
+  "info_sets": 8920,
+  "coverage": 0.9986,
+  "gate": {
+    "threshold": 10.0,
+    "passed": true
+  }
+}

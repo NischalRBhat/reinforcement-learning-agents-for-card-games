@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "card-games-rl"
+version = "0.3.0"
+description = "Card game engines, RL environments, trained agents and a web table"
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+include = ["card_games_rl*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+markers = [
+    "e2e: browser end-to-end tests (Playwright)",
+    "slow: longer statistical or training tests",
+]
+
+[tool.setuptools.package-data]
+"card_games_rl.games.poker" = ["*.json"]
+"card_games_rl.training" = ["configs/*.yaml", "*.json"]

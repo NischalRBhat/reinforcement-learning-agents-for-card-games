@@ -1,0 +1,35 @@
+{
+  "game": "blackjack",
+  "obs_version": 1,
+  "updated_at": "2026-11-02T13:02:44",
+  "algorithm": "MaskablePPO",
+  "profile": "full",
+  "timesteps": 0,
+  "seed": 0,
+  "deterministic": true,
+  "net_arch": [
+    64,
+    64
+  ],
+  "validation": {
+    "metric": "ev",
+    "value": 0.00337,
+    "ci95": 0.00957534729877601,
+    "mean_return": 0.00337,
+    "episodes": 50000,
+    "higher_is_better": true
+  },
+  "reference": {
+    "metric": "ev",
+    "value": 0.00419,
+    "ci95": 0.009931779027667596,
+    "mean_return": 0.00419,
+    "episodes": 50000,
+    "higher_is_better": true
+  },
+  "gate": {
+    "baseline": "optimal",
+    "max_gap": 0.01,
+    "passed": true
+  }
+}

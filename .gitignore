@@ -1,0 +1,27 @@
+# Environments
+.venv*/
+.env
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Training artefacts (keep meta.json and the readable eval_report.md, ignore weights and raw data)
+runs/
+models/**/*.zip
+models/**/pool/
+models/**/checkpoints/
+models/**/cfr/
+models/**/*.pkl.gz
+models/**/eval_report.json
+*.log
+
+# Local working files used while building the project (not part of the published repo)
+CLAUDE.md
+.claude/
+docs/PLAN.md
+docs/GAME_RULES.md
+user_prompt.txt

@@ -1,0 +1,28 @@
+{
+  "game": "donkey",
+  "obs_version": 1,
+  "updated_at": "2026-11-02T21:44:20",
+  "algorithm": "MaskablePPO",
+  "profile": "full",
+  "timesteps": 6500000,
+  "seed": 0,
+  "deterministic": true,
+  "net_arch": [
+    256,
+    256
+  ],
+  "validation": {
+    "metric": "donkey_rate",
+    "value": 0.1575,
+    "ci95": 0.015151321562496796,
+    "mean_return": 0.12333333333333331,
+    "episodes": 2000,
+    "deals": 500,
+    "higher_is_better": false
+  },
+  "reference": null,
+  "gate": {
+    "threshold": 0.18,
+    "passed": true
+  }
+}

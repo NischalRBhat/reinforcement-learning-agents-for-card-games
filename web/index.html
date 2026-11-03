@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Card Games RL</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='5' y='3' width='20' height='26' rx='4' fill='%23f5b942'/%3E%3Ctext x='15' y='22' font-size='15' text-anchor='middle' fill='%231d1505'%3E%E2%99%A0%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body data-phase="idle">
+  <a class="skip-link" href="#boards">Skip to the table</a>
+
+  <header class="appbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">♠</span>
+      <span class="brand-name">Card Games <span class="brand-accent">RL</span></span>
+    </div>
+    <div id="status" class="status-pill" role="status" aria-live="polite"><span class="dot" aria-hidden="true"></span><span class="status-text">Loading…</span></div>
+    <div class="appbar-actions">
+      <button id="help-open" class="icon-btn" type="button" title="How to play and shortcuts (?)" aria-label="How to play and keyboard shortcuts">?</button>
+    </div>
+  </header>
+
+  <div class="shell">
+    <nav class="rail" aria-label="Games">
+      <h2 class="rail-title">Games</h2>
+      <div id="game-list" class="game-list"></div>
+      <p class="rail-legend">
+        <span><i class="status-dot good"></i>Agent met its target</span>
+        <span><i class="status-dot warn"></i>Below target</span>
+        <span><i class="status-dot"></i>Not trained</span>
+      </p>
+    </nav>
+
+    <main class="stage" id="stage">
+      <section class="setup" aria-label="Game setup">
+        <div class="setup-head">
+          <div class="setup-title">
+            <h1 id="game-title">Card Games RL</h1>
+            <p id="game-desc" class="muted"></p>
+          </div>
+          <div class="setup-aside">
+            <button id="rules-open" class="btn btn-ghost rules-btn" type="button" aria-controls="rules" aria-expanded="false" title="How to play (H)">
+              <svg aria-hidden="true" viewBox="0 0 16 16" width="15" height="15"><path d="M2 3.2C3.8 2.4 5.9 2.5 8 3.6v10C5.9 12.5 3.8 12.4 2 13.2zM14 3.2c-1.8-.8-3.9-.7-6 .4v10c2.1-1.1 4.2-1.2 6-.4z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+              How to play
+            </button>
+            <div id="agent-chip"></div>
+          </div>
+        </div>
+        <div class="setup-controls">
+          <div class="field">
+            <span class="field-label" id="mode-label">Mode</span>
+            <div id="mode-list" class="segmented" role="radiogroup" aria-labelledby="mode-label"></div>
+          </div>
+          <div id="seat-section" class="field" hidden>
+            <span class="field-label">Players</span>
+            <div id="seat-config" class="seat-config"></div>
+          </div>
+          <div class="field seed-field">
+            <label class="field-label" for="seed">Seed</label>
+            <input id="seed" type="number" min="0" placeholder="Random" inputmode="numeric">
+          </div>
+          <button id="start" class="btn btn-primary btn-lg" type="button">Start game</button>
+        </div>
+      </section>
+
+      <div id="round-bar" class="result-banner" hidden>
+        <div class="result-copy">
+          <span class="eyebrow" id="round-eyebrow">Deal finished</span>
+          <strong id="round-result"></strong>
+          <span id="auto-countdown" class="muted"></span>
+        </div>
+        <div class="result-actions">
+          <button id="cancel-auto" class="btn btn-ghost" type="button" hidden>Stay on this result</button>
+          <button id="new-round" class="btn btn-primary" type="button">Next deal</button>
+        </div>
+      </div>
+
+      <div id="boards" class="boards" tabindex="-1"></div>
+    </main>
+
+    <aside class="inspector" aria-label="Game information">
+      <section class="panel">
+        <header class="panel-head"><h2>Playback</h2><span class="kbd-hint"><kbd>Space</kbd> <kbd>S</kbd></span></header>
+        <div class="playback">
+          <button id="pause" class="btn" type="button" aria-pressed="false" title="Pause or resume computer moves (Space)">
+            <span class="ico" aria-hidden="true"><svg viewBox="0 0 16 16" width="14" height="14"><rect x="3" y="2" width="3.5" height="12" rx="1" fill="currentColor"/><rect x="9.5" y="2" width="3.5" height="12" rx="1" fill="currentColor"/></svg></span>
+            <span class="label">Pause</span>
+          </button>
+          <button id="step" class="btn" type="button" title="Play one computer move (S)">
+            <span class="ico" aria-hidden="true"><svg viewBox="0 0 16 16" width="14" height="14"><path d="M2.5 2.5v11a.8.8 0 0 0 1.2.7l7.3-5.5a.8.8 0 0 0 0-1.4L3.7 1.8a.8.8 0 0 0-1.2.7z" fill="currentColor"/><rect x="11.5" y="2" width="2.5" height="12" rx="1" fill="currentColor"/></svg></span>
+            Step
+          </button>
+        </div>
+        <label class="speed" for="speed">
+          <span class="field-label">Speed</span>
+          <input id="speed" type="range" min="0" max="4" step="1" value="2">
+          <span id="speed-label" class="speed-value"></span>
+        </label>
+        <label class="switch">
+          <input id="auto-next" type="checkbox">
+          <span class="track" aria-hidden="true"></span>
+          <span>Auto-deal next hand when watching</span>
+        </label>
+      </section>
+
+      <section class="panel">
+        <header class="panel-head"><h2>Agent insight</h2></header>
+        <div id="insight" class="insight"></div>
+      </section>
+
+      <section class="panel">
+        <header class="panel-head"><h2>Scoreboard</h2></header>
+        <div id="stats" class="stats"></div>
+      </section>
+
+      <section class="panel panel-grow">
+        <header class="panel-head"><h2>Move history</h2></header>
+        <ol id="log" class="log" reversed></ol>
+      </section>
+    </aside>
+  </div>
+
+  <aside id="rules" class="drawer" aria-labelledby="rules-title" hidden>
+    <header class="drawer-head">
+      <div>
+        <span class="eyebrow">How to play</span>
+        <h2 id="rules-title" tabindex="-1"></h2>
+      </div>
+      <button id="rules-close" class="icon-btn" type="button" aria-label="Close How to play">✕</button>
+    </header>
+    <div class="drawer-toolbar">
+      <span class="fine-print">The table stays playable while this is open.</span>
+      <button id="rules-toggle-all" class="btn btn-ghost btn-sm" type="button">Expand all</button>
+    </div>
+    <div id="rules-body" class="drawer-body"></div>
+  </aside>
+
+  <div id="toasts" class="toasts" aria-live="assertive"></div>
+
+  <dialog id="help" class="dialog" aria-labelledby="help-title">
+    <header class="dialog-head">
+      <h2 id="help-title">How to play</h2>
+      <button class="icon-btn" type="button" data-close aria-label="Close">✕</button>
+    </header>
+    <div id="help-body" class="dialog-body"></div>
+  </dialog>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+{
+  "blackjack": {
+    "cpu": 1299.8,
+    "cuda": 482.9,
+    "best": "cpu"
+  },
+  "bluff": {
+    "cpu": 913.9,
+    "cuda": 493.6,
+    "best": "cpu"
+  },
+  "hearts": {
+    "cpu": 744.9,
+    "cuda": 574.2,
+    "best": "cpu"
+  },
+  "klondike": {
+    "cpu": 274.1,
+    "cuda": 575.3,
+    "best": "cuda"
+  },
+  "poker": {
+    "cpu": 440.9,
+    "cuda": 321.0,
+    "best": "cpu"
+  },
+  "rummy": {
+    "cpu": 744.8,
+    "cuda": 523.2,
+    "best": "cpu"
+  }
+}

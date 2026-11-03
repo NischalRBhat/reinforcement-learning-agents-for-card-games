@@ -1,0 +1,25 @@
+{
+  "game": "rummy",
+  "obs_version": 2,
+  "updated_at": "2026-11-02T19:06:30",
+  "algorithm": "search",
+  "policy": "card_games_rl.games.rummy.search:LookaheadPolicy",
+  "profile": "full",
+  "timesteps": 0,
+  "seed": 0,
+  "deterministic": true,
+  "validation": {
+    "metric": "win_rate",
+    "value": 0.555,
+    "ci95": 0.027812165559449202,
+    "mean_return": 0.056185,
+    "episodes": 1000,
+    "deals": 500,
+    "higher_is_better": true
+  },
+  "reference": null,
+  "gate": {
+    "threshold": 0.55,
+    "passed": true
+  }
+}

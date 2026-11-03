@@ -1,0 +1,28 @@
+{
+  "game": "klondike",
+  "obs_version": 1,
+  "updated_at": "2026-11-02T19:43:26",
+  "algorithm": "MaskablePPO",
+  "profile": "full",
+  "timesteps": 500000,
+  "seed": 0,
+  "deterministic": false,
+  "net_arch": [
+    512,
+    512
+  ],
+  "validation": {
+    "metric": "win_rate",
+    "value": 0.45,
+    "ci95": 0.04365091987130652,
+    "mean_return": 0.4973269230769231,
+    "episodes": 500,
+    "deals": 500,
+    "higher_is_better": true
+  },
+  "reference": null,
+  "gate": {
+    "threshold": 0.6,
+    "passed": false
+  }
+}
