@@ -374,7 +374,7 @@ class Session:
         if viewer is None and self.reveal:
             for seat in range(len(board.seats)):
                 own = game.view(seat)
-                for key in ("hands", "hole"):
+                for key in ("hands", "hole", "passes"):  # each seat's private part, from its own view
                     if key in view and isinstance(view[key], list):
                         view[key][seat] = own[key][seat]
         if not board.human_turn:

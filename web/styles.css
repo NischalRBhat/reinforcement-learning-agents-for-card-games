@@ -615,3 +615,30 @@ button.slot:hover:not(:disabled) { background: rgba(0, 0, 0, 0.2); border-color:
   :root { --drawer-w: 380px; }
   body.rules-open .shell { grid-template-columns: 216px minmax(0, 1fr) var(--drawer-w); }
 }
+
+/* ----- Moves made visible (Blackjack trail, Poker bubbles, Hearts passes) ----- */
+.move-trail { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; font-size: 13px; }
+.trail-label { color: var(--on-felt-2); }
+.move-chip { padding: 3px 10px; border-radius: 999px; background: rgba(0, 0, 0, 0.28); border: 1px solid rgba(255, 255, 255, 0.1); color: var(--on-felt-2); }
+.move-chip.fresh { background: rgba(245, 185, 66, 0.2); border-color: rgba(245, 185, 66, 0.6); color: #fff6dd; font-weight: 600; animation: rise 0.25s var(--ease); }
+.dealer-note.bust { color: #8ff0c4; }
+.action-bubble {
+  position: relative; padding: 4px 12px; border-radius: 10px; font-size: 13px; font-weight: 600;
+  background: #f7f4ec; color: #1b1f24; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35); animation: rise 0.22s var(--ease);
+}
+.action-bubble.stale { background: rgba(0, 0, 0, 0.3); color: var(--on-felt-2); box-shadow: none; font-weight: 500; }
+.hand-ending {
+  max-width: 460px; text-align: center; font-size: 13px; color: var(--on-felt-2); padding: 8px 14px; border-radius: 12px;
+  background: rgba(0, 0, 0, 0.32); border: 1px solid rgba(245, 185, 66, 0.45); animation: rise 0.25s var(--ease);
+}
+.hand-ending strong { color: var(--on-felt); }
+.pass-summary {
+  display: flex; flex-direction: column; gap: 4px; padding: 8px 12px; border-radius: 12px; font-size: 12px;
+  background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.1); animation: rise 0.25s var(--ease);
+}
+.pass-title { font-weight: 600; color: var(--on-felt); text-align: center; }
+.pass-row { display: grid; grid-template-columns: 150px auto; align-items: center; gap: 8px; color: var(--on-felt-2); }
+.pass-row .card.small { --card-w: 30px; --card-h: 42px; }
+.pass-row .card.small .center { font-size: 14px; padding-top: 8px; }
+.pass-row .hand.compact .card + .card { margin-left: 2px; }
+.card.received { box-shadow: 0 0 0 3px var(--c-human), 0 0 14px rgba(56, 189, 248, 0.5); }

@@ -6,17 +6,17 @@ Seven card games with correct rules engines, AI agents trained by reinforcement 
 
 Each game has a hand-written **System** bot as a baseline and a trained **agent**. The agent's method is chosen to suit the game:
 
-| Game | Players | Agent | Result vs the System bot | Target |
+| Game | Players | Agent | Held-out test result (95% CI) | Target |
 |---|---|---|---|---|
-| Blackjack | 1 vs dealer | PPO (masked) | −0.0006 ± 0.0096 EV/hand, within 0.01 of optimal play | ✅ |
-| Klondike Solitaire | 1 | PPO (masked), GPU | 45% of deals won (System bot 51%) | ❌ target 60% |
-| Texas Hold'em | 2 | Monte Carlo CFR | +25.9 bb/100 | ✅ ≥ +10 |
-| Rummy | 2 | Look-ahead search | 55.5% wins | ✅ ≥ 55% |
-| Bluff | 4 | PPO self-play | 91.9% wins (fair share 25%) | ✅ ≥ 30% |
-| Hearts | 4 | PPO self-play | 5.23 ± 0.31 points per hand (System bot vs itself 7.2) | ✅ ≤ 6.0 |
-| Donkey | 4 | PPO self-play | Donkey in 15.8% of games (fair share 25%) | ✅ ≤ 18% |
+| Blackjack | 1 vs dealer | PPO (masked) | −0.0006 ± 0.0096 EV/hand; optimal play scores +0.0013 on the same hands | ✅ within 0.01 of optimal |
+| Klondike Solitaire | 1 | PPO (masked), GPU | 39.4% ± 4.3 of deals won (System bot 51.2%) | ❌ ≥ 60% |
+| Texas Hold'em | 2 | Monte Carlo CFR | −14.2 ± 24.8 bb/100 vs the System bot | ❌ ≥ +10 |
+| Rummy | 2 | Look-ahead search | 54.9% ± 2.9 wins vs the System bot (bot vs itself 49.7%) | ❌ ≥ 55% (inside the margin) |
+| Bluff | 4 | PPO self-play | 89.9% ± 1.8 wins vs 3 System bots (fair share 25%) | ✅ ≥ 30% |
+| Hearts | 4 | PPO self-play | 5.55 ± 0.32 points per hand vs 3 System bots (bot vs itself 6.79) | ✅ ≤ 6.0 |
+| Donkey | 4 | PPO self-play | the Donkey in 16.5% ± 1.5 of games vs 3 System bots (fair share 25%) | ✅ ≤ 18% |
 
-Blackjack and Hearts are held-out test results. The others are validation results from the latest training run; `evaluate --all` refreshes them on test deals. Multi-player games use **duplicate deals**: each deal is replayed with the agent in every seat, so the luck of the cards cancels out.
+These come from `evaluate --all` on test deals that training never saw. Multi-player games use **duplicate deals**: each deal is replayed with the agent in every seat, so the luck of the cards cancels out. Poker scored +25.9 bb/100 on its validation hands during training. Its test result is lower and very noisy (hands in which both players randomise vary a lot), so it needs a longer run or more test hands to be settled. Klondike's agent still plays worse than the System bot.
 
 The full rules, how to play each game, and how each bot and agent works are in **[docs/GAMES.md](docs/GAMES.md)**.
 

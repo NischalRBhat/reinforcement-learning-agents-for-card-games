@@ -296,3 +296,28 @@ def test_klondike_solver_answers_only_after_the_deal(client):
     assert solved["boards"][0]["solve_result"]["verdict"] in ("winnable", "not winnable", "unknown")
     hearts = create(client, "hearts")
     assert client.post(f"/api/sessions/{hearts['id']}/solve", json={"board": 0}).status_code == 422
+
+
+def test_hearts_spectators_see_every_pass_after_the_exchange(client):
+    state = create(client, "hearts", "agent_vs_agent", seed=2)
+    sid = state["id"]
+    while state["boards"][0]["view"]["phase"] == "passing":
+        state = client.post(f"/api/sessions/{sid}/advance", json={"steps": 1}).json()
+    passes = state["boards"][0]["view"]["passes"]
+    if passes:  # hands without passing have no summary
+        assert all(p["cards"] and len(p["cards"]) == 3 for p in passes)
+
+
+def test_humans_never_see_which_cards_bots_pass_in_hearts(client):
+    state = create(client, "hearts", "human_vs_agent", seed=6)  # round 0 passes left
+    sid = state["id"]
+    for card in state["boards"][0]["view"]["legal_actions"][:3]:
+        state = client.post(f"/api/sessions/{sid}/action", json={"action": card["action"]}).json()
+    moves = []
+    while state["boards"][0]["view"]["phase"] == "passing":
+        state = client.post(f"/api/sessions/{sid}/advance", json={"steps": 1}).json()
+        moves += state["advanced"]
+    assert len(moves) == 9
+    for move in moves:
+        assert move["label"] == "Pass a card"
+        assert all(t["label"] == "Pass a card" for t in move["top"] or [])
