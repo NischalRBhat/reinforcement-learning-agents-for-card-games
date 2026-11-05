@@ -14,7 +14,8 @@ from card_games_rl.core.policy import sample_legal  # noqa: F401  (re-exported)
 class ModelPolicy(Policy):
     name = "agent"
 
-    def __init__(self, path: str | Path | None = None, deterministic: bool = True, seed: int | None = None, model=None):
+    def __init__(self, path: str | Path | None = None, deterministic: bool = True, seed: int | None = None, model=None,
+                 encoder=None):
         if model is None:
             from sb3_contrib import MaskablePPO
 
@@ -23,14 +24,15 @@ class ModelPolicy(Policy):
         self.model = model
         self.deterministic = deterministic
         self.rng = random.Random(seed)
+        self.encoder = encoder  # None: the engine's own observation
 
     @classmethod
-    def from_model(cls, model, deterministic: bool = True) -> "ModelPolicy":
+    def from_model(cls, model, deterministic: bool = True, encoder=None) -> "ModelPolicy":
         """Wrap a live (training) model without saving it first."""
-        return cls(model=model, deterministic=deterministic)
+        return cls(model=model, deterministic=deterministic, encoder=encoder)
 
     def probabilities(self, game: Game, player: int) -> np.ndarray:
-        observation = np.clip(game.observation(player), 0.0, 1.0)
+        observation = self.encoder(game, player) if self.encoder else np.clip(game.observation(player), 0.0, 1.0)
         mask = game.action_mask()
         obs_tensor, _ = self.model.policy.obs_to_tensor(observation)
         with torch.no_grad():

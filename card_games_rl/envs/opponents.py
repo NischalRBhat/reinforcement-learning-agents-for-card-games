@@ -7,7 +7,8 @@ from collections.abc import Callable
 from pathlib import Path
 
 from card_games_rl.core import Game, Policy, RandomPolicy
-from card_games_rl.games import game_class, heuristic_policy
+from card_games_rl.encoders import BASE, get_encoder
+from card_games_rl.games import heuristic_policy
 
 
 class OpponentSampler:
@@ -45,8 +46,10 @@ class OpponentPool(OpponentSampler):
     DEFAULT_MIX = {"recent": 0.50, "old": 0.30, "heuristic": 0.15, "random": 0.05}
 
     def __init__(self, game_id: str, pool_dir: str | Path, mix: dict[str, float] | None = None,
-                 recent_k: int = 3, refresh_every: int = 100, cache_size: int = 8, seed: int | None = None):
+                 recent_k: int = 3, refresh_every: int = 100, cache_size: int = 8, seed: int | None = None,
+                 variant: str = BASE):
         self.game_id = game_id
+        self.encoder = get_encoder(game_id, variant)  # snapshots see the game the way their learner does
         self.pool_dir = Path(pool_dir)
         self.mix = mix or dict(self.DEFAULT_MIX)
         self.recent_k = recent_k
@@ -73,12 +76,12 @@ class OpponentPool(OpponentSampler):
         from card_games_rl.agents.numpy_policy import NumpyPolicy
 
         try:
-            policy = NumpyPolicy(path, deterministic=False, seed=self.rng.randrange(2**31))
+            policy = NumpyPolicy(path, deterministic=False, seed=self.rng.randrange(2**31), encoder=self.encoder)
         except Exception:  # noqa: BLE001 - pruned or unreadable snapshot: never crash a worker
             # The trainer prunes old snapshots; this worker's list was stale.
             self._refresh()
             return self.heuristic
-        if policy.layers[0][0].shape[1] != game_class(self.game_id).obs_size:
+        if policy.layers[0][0].shape[1] != self.encoder.size:
             # Left over from before an observation change (OBS_VERSION bump): never use it.
             self._incompatible.add(path)
             self._refresh()

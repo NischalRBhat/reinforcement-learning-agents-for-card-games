@@ -39,7 +39,7 @@ def train_search(game_id: str, config: dict[str, Any], out_dir: Path, log: Calla
     write_meta(game_id, {"algorithm": "search", "policy": config["search_policy"], "profile": run["profile"],
                          "timesteps": 0, "seed": seed, "deterministic": True, "validation": _summary(result),
                          "reference": None, "gate": {**gate, "passed": gate_passed(game_id, result, gate)}},
-               root=out_dir.parent)
+               root=out_dir.parent, variant=config.get("variant", "base"))
     log(f"validation: {result['metric']} {result['value']:.4f} +/-{result['ci95']:.4f} -> registered in {out_dir}")
     return out_dir / "meta.json"
 

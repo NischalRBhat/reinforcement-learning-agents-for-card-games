@@ -11,6 +11,7 @@ from card_games_rl.agents.registry import write_meta
 from card_games_rl.api.app import create_app
 from card_games_rl.api.sessions import MODES, AgentCache
 from card_games_rl.core import Policy
+from card_games_rl.encoders import variants_for
 from card_games_rl.games import GAME_SPECS, heuristic_policy
 
 
@@ -39,8 +40,8 @@ def spies():
 
 @pytest.fixture(scope="module")
 def client(spies):
-    def loader(game_id, root=None):
-        return spies.setdefault(game_id, SpyPolicy(game_id))
+    def loader(game_id, root=None, variant="base"):
+        return spies.setdefault(game_id if variant == "base" else f"{game_id}-{variant}", SpyPolicy(game_id))
 
     app = create_app(agents=AgentCache(loader=loader))
     return TestClient(app)
@@ -78,13 +79,21 @@ def test_catalog_lists_all_games_with_modes_and_model_status(client):
     games = client.get("/api/games").json()
     assert {g["id"] for g in games} == set(GAME_SPECS)
     for g in games:
-        assert [m["id"] for m in g["modes"]] == list(MODES)
+        counting = "counting" in variants_for(g["id"])
+        competitive_counting = counting and g["category"] == "competitive"
+        assert [m["id"] for m in g["modes"]] == list(MODES[:3]) + (["agent_vs_counting"] if competitive_counting else [])
+        assert ("counting" in g["controllers"]) == counting
+        assert set(g["agents"]) == set(variants_for(g["id"]))
         assert {"trained", "metric", "value", "gate_passed"} <= set(g["agent"])
 
 
 @pytest.mark.parametrize("mode", MODES)
 @pytest.mark.parametrize("game", sorted(GAME_SPECS))
 def test_every_game_and_mode_plays_to_completion(client, game, mode):
+    if mode == "agent_vs_counting" and "counting" not in variants_for(game):
+        response = client.post("/api/sessions", json={"game": game, "mode": mode})
+        assert response.status_code == 422
+        return
     state = create(client, game, mode)
     category = GAME_SPECS[game].category
     if mode == "human_vs_agent" and category in ("solo", "dealer"):
@@ -321,3 +330,10 @@ def test_humans_never_see_which_cards_bots_pass_in_hearts(client):
     for move in moves:
         assert move["label"] == "Pass a card"
         assert all(t["label"] == "Pass a card" for t in move["top"] or [])
+
+
+def test_web_files_are_revalidated_so_updates_show_up(client):
+    for path in ("/", "/styles.css", "/js/app.js", "/js/renderers/hearts.js"):
+        response = client.get(path)
+        assert response.status_code == 200 and response.headers["cache-control"] == "no-cache", path
+    assert "no-cache" not in client.get("/api/health").headers.get("cache-control", "")

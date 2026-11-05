@@ -9,6 +9,7 @@ export const GAME_META = {
   bluff: { icon: "?!", hue: 30, players: "4 players" },
   hearts: { icon: "♥", hue: 335, players: "4 players" },
   donkey: { icon: "D", hue: 50, players: "4 players" },
+  canasta: { icon: "★", hue: 280, players: "4 players, partners" },
 };
 
 export const GUIDES = {
@@ -56,6 +57,13 @@ export const GUIDES = {
     "Empty your hand to be safe. The last player still holding cards is the Donkey.",
   ],
 };
+
+GUIDES.canasta = [
+  "Two partnerships: you and North against West and East. Jokers and 2s are wild.",
+  "Each turn: draw from the stock or take the whole pile, meld, then discard one card.",
+  "Meld 3+ cards of a rank (at least 2 natural, at most 3 wild). Seven make a canasta.",
+  "Go out once your side has a canasta. First side to 5,000 wins the match.",
+];
 
 export const SHORTCUTS = [
   ["Space", "Pause or resume computer moves"],
@@ -262,6 +270,53 @@ export const RULES = {
       "Pass high spades (A♠, K♠) unless you hold enough spades to protect them.",
       "Empty a suit early so you can dump the Q♠ and hearts on others.",
       "Watch for someone collecting every heart; take one to stop a moon shot.",
+    ] },
+  ],
+  canasta: [
+    { title: "Goal", text: "Score more than the other partnership. Points come from the cards you meld, canastas (melds of seven), red threes and going out; cards left in hand count against you. The first side to 5,000 wins the match." },
+    { title: "Setup", items: [
+      "Four players in two partnerships: partners sit opposite (you and North against West and East).",
+      "Two decks plus 4 jokers: 108 cards. Each player gets 11.",
+      "Jokers and 2s are wild. Red threes are bonus cards: they are laid out at once and replaced.",
+    ] },
+    { title: "A turn", items: [
+      "Draw the top card of the stock, or take the whole discard pile (see below).",
+      "Meld as much as you like: new melds, or cards added to your side's melds.",
+      "Discard one card. That ends your turn.",
+    ] },
+    { title: "Melds and canastas", items: [
+      "A meld is 3 or more cards of one rank, 4 to Ace, with at least 2 natural cards and at most 3 wild cards.",
+      "Your side has one meld per rank; either partner can add to it.",
+      "Seven or more cards make a canasta: natural (no wild cards) +500, mixed +300.",
+      "Black threes can only be melded when you go out.",
+    ] },
+    { title: "Your opening meld", items: [
+      "Your side's first melds in a hand must be worth a minimum, set by your match score: 15 below zero, 50 up to 1,495, 90 up to 2,995, 120 from 3,000.",
+      "Card values: joker 50; 2 and Ace 20; King to 8 10; 7 to 4 and black 3 5.",
+    ] },
+    { title: "Taking the pile", items: [
+      "You must meld the pile's top card at once with cards from your hand; then the whole pile is yours.",
+      "Frozen pile (a wild card or red three is in it, or your side hasn't melded yet): you need a natural pair matching the top card.",
+      "Unfrozen pile: a natural pair, or one natural and one wild card, or add the top card to your side's meld of that rank.",
+      "A black three on top blocks the next player, and a wild card on top can't be taken.",
+      "Before your side has melded, the top card plus cards from your hand must reach the opening minimum before the rest of the pile is picked up.",
+    ] },
+    { title: "Going out and scoring", items: [
+      "You may go out only when your side has a canasta: meld every card, or all but one and discard it. +100, or +200 concealed (your whole hand melded in one turn, with nothing melded before).",
+      "The hand also ends if the stock runs out and the next player can't take the pile.",
+      "Each side scores its melded cards, canasta bonuses, red threes (+100 each, +800 for all four; negative if the side never melded) and going out, minus the cards left in its hands.",
+    ] },
+    { title: "At this table", items: [
+      "Click a card in your hand: the melds, adds and discard it allows appear below it.",
+      "“All legal moves” lists every move as a button.",
+      "Each side's melds are shown in a strip; canastas are marked natural or mixed.",
+      "The pile shows when it is frozen or blocked.",
+    ] },
+    { title: "Tips", items: [
+      "Build towards canastas: going out needs one, and they are worth the most.",
+      "Watch which ranks the opponents have melded: discarding one lets them take an unfrozen pile.",
+      "Discard a wild card to freeze a big pile when the opponents are close to taking it.",
+      "Keep a black three to discard when the pile is valuable.",
     ] },
   ],
   donkey: [

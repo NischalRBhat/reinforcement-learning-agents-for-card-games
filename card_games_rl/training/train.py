@@ -2,6 +2,10 @@
 
     python -m card_games_rl.training.train --game hearts --profile smoke
     python -m card_games_rl.training.train --all --profile full --time-budget 3h
+    python -m card_games_rl.training.train --all --variant counting --profile full --time-budget 3h
+
+A ``--variant`` agent (e.g. card counting) trains into ``models/<game>-<variant>/``
+and never touches the base agent in ``models/<game>/``.
 
 Outputs per game:
   models/<game>/best.zip + meta.json    best checkpoint by validation metric
@@ -34,7 +38,7 @@ def env_spec(game_id: str, config: dict[str, Any], rank: int, seed: int, pool_di
     """Picklable description of one training env (built inside a torch-free worker)."""
     return {"game_id": game_id, "seed": seed + rank, "opponents": config["opponents"],
             "opponent_mix": config.get("opponent_mix"), "game_kwargs": config.get("game_kwargs") or {},
-            "pool_dir": str(pool_dir)}
+            "pool_dir": str(pool_dir), "variant": config.get("variant", "base")}
 
 
 def _next_multiple(steps: int, interval: int) -> int:
@@ -56,6 +60,7 @@ def build_callback(game_id: str, config: dict[str, Any], out_dir: Path, log, dea
     from card_games_rl.agents.model_policy import ModelPolicy
     from card_games_rl.agents.numpy_policy import export_policy
     from card_games_rl.agents.registry import write_meta
+    from card_games_rl.encoders import BASE, get_encoder
 
     from .evaluate import VALIDATION_SEEDS, gate_passed, make_baseline, play
 
@@ -63,6 +68,8 @@ def build_callback(game_id: str, config: dict[str, Any], out_dir: Path, log, dea
     evaluation = config["evaluation"]
     solo = GAME_SPECS[game_id].max_players == 1
     pool_dir, ckpt_dir = out_dir / "pool", out_dir / "checkpoints"
+    variant = config.get("variant", BASE)
+    encoder = get_encoder(game_id, variant) if variant != BASE else None
 
     class TrainingCallback(BaseCallback):
         def __init__(self):
@@ -89,7 +96,7 @@ def build_callback(game_id: str, config: dict[str, Any], out_dir: Path, log, dea
 
         def evaluate(self) -> None:
             steps = self.num_timesteps
-            agent = ModelPolicy.from_model(self.model, deterministic=evaluation["deterministic"])
+            agent = ModelPolicy.from_model(self.model, deterministic=evaluation["deterministic"], encoder=encoder)
             opponent = None if solo else make_baseline(game_id, evaluation["opponent"], seed)
             result = play(game_id, agent, opponent, run["eval_episodes"], VALIDATION_SEEDS)
             gate = evaluation["gate"]
@@ -107,7 +114,7 @@ def build_callback(game_id: str, config: dict[str, Any], out_dir: Path, log, dea
                     "deterministic": evaluation["deterministic"],
                     "net_arch": config["policy"]["net_arch"], "validation": summary(result),
                     "reference": summary(self.reference), "gate": {**gate, "passed": passed},
-                }, root=out_dir.parent)
+                }, root=out_dir.parent, variant=variant)
             self.model.save(str(ckpt_dir / "latest.zip"))
             # Cumulative training time, so --time-budget is a total across resumes.
             (ckpt_dir / "state.json").write_text(json.dumps(
@@ -185,24 +192,29 @@ def build_model(config: dict[str, Any], vec_env, device: str, seed: int, run_dir
 def train(game_id: str, profile: str = "smoke", time_budget: str | None = None, seed: int = 0,
           resume: bool = False, n_envs: int | None = None, torch_threads: int = 2,
           model_root: Path | None = None, run_root: Path | None = None,
-          overrides: dict[str, Any] | None = None, device: str = "auto") -> Path:
-    """Train one game. ``overrides`` patch the profile (e.g. tiny runs in tests)."""
+          overrides: dict[str, Any] | None = None, device: str = "auto", variant: str = "base") -> Path:
+    """Train one game's agent. ``overrides`` patch the profile (e.g. tiny runs in tests);
+    ``variant`` picks the agent kind (``base`` or ``counting``)."""
+    from card_games_rl.encoders import agent_key, check_variant
+
+    check_variant(game_id, variant)
     import torch
     from sb3_contrib import MaskablePPO
 
     torch.set_num_threads(torch_threads)
     device = resolve_device(game_id, device)
-    config = load_config(game_id, profile)
+    config = load_config(game_id, profile, variant)
     config["run"].update(overrides or {})
     run = config["run"]
-    out_dir = (model_root or ROOT / "models") / game_id
-    run_dir = (run_root or ROOT / "runs") / game_id
+    key = agent_key(game_id, variant)
+    out_dir = (model_root or ROOT / "models") / key
+    run_dir = (run_root or ROOT / "runs") / key
     for path in (out_dir / "pool", out_dir / "checkpoints", run_dir):
         path.mkdir(parents=True, exist_ok=True)
     log_file = run_dir / "progress.log"
 
     def log(message: str) -> None:
-        line = f"[{game_id}] {message}"
+        line = f"[{key}] {message}"
         print(line, flush=True)
         with log_file.open("a", encoding="utf-8") as stream:
             stream.write(time.strftime("%Y-%m-%d %H:%M:%S ") + line + "\n")
@@ -244,7 +256,7 @@ def train(game_id: str, profile: str = "smoke", time_budget: str | None = None, 
     from card_games_rl.agents.registry import read_meta
 
     start = model.num_timesteps
-    previous = read_meta(game_id, out_dir.parent) if start else None
+    previous = read_meta(game_id, out_dir.parent, variant) if start else None
     callback = build_callback(game_id, config, out_dir, log, deadline, seed, start,
                               previous["validation"] if previous else None, used)
     if warm_started:  # the cloned policy becomes the first best.zip, so PPO can only improve on it
@@ -270,7 +282,14 @@ def train(game_id: str, profile: str = "smoke", time_budget: str | None = None, 
 
 def train_all(args: argparse.Namespace) -> int:
     """One process per game, in parallel; output streams to the console with [game] prefixes."""
+    from card_games_rl.encoders import variants_for
+
     games = sorted(GAME_SPECS) if args.games is None else args.games
+    if args.variant != "base":  # only the games that have such an agent
+        skipped = [g for g in games if args.variant not in variants_for(g)]
+        games = [g for g in games if g not in skipped]
+        if skipped and args.games is not None:
+            print(f"No {args.variant} agent for: {', '.join(skipped)} (skipped)")
     cores = os.cpu_count() or 4
     threads = max(1, cores // (2 * len(games)))
     processes = {}
@@ -283,7 +302,7 @@ def train_all(args: argparse.Namespace) -> int:
             command.append("--resume")
         if args.n_envs:
             command += ["--n-envs", str(args.n_envs)]
-        command += ["--device", args.device]
+        command += ["--device", args.device, "--variant", args.variant]
         processes[game_id] = subprocess.Popen(command, cwd=ROOT)
     failed = [g for g, p in processes.items() if p.wait() != 0]
     print("\nAll training processes finished." + (f" FAILED: {failed}" if failed else ""))
@@ -304,11 +323,13 @@ def main() -> int:
     parser.add_argument("--torch-threads", type=int, default=2)
     parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"],
                         help="auto = faster device per game from the training benchmark (CPU if not measured)")
+    parser.add_argument("--variant", default="base", choices=["base", "counting"],
+                        help="Agent kind: base, or counting (card-counting features; trains into models/<game>-counting/)")
     args = parser.parse_args()
     if args.all:
         return train_all(args)
     train(args.game, args.profile, args.time_budget, args.seed, args.resume, args.n_envs, args.torch_threads,
-          device=args.device)
+          device=args.device, variant=args.variant)
     return 0
 
 

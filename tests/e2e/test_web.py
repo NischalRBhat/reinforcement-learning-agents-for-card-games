@@ -38,7 +38,7 @@ class UniformAgent(Policy):
 
 @pytest.fixture(scope="module")
 def base_url():
-    app = create_app(agents=AgentCache(loader=lambda game_id, root=None: UniformAgent(game_id)))
+    app = create_app(agents=AgentCache(loader=lambda game_id, root=None, **_: UniformAgent(game_id)))
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
@@ -195,3 +195,24 @@ def test_how_to_play_stays_open_while_playing(page):
     human_move(page)  # the table is still usable beside the panel
     page.keyboard.press("Escape")
     assert page.locator("#rules").is_hidden()
+
+
+@pytest.mark.parametrize("game", ["bluff", "donkey", "hearts", "rummy"])
+def test_agent_vs_counting_agent_runs_to_the_end(page, game):
+    start(page, game, "agent_vs_counting", instant=True)
+    page.wait_for_selector("body[data-phase=done]", timeout=90000)
+    board = page.locator("#boards").inner_text()
+    assert "Counting agent" in board and "Agent" in board
+    assert page.locator(".seat-tag.ctl-counting").count() >= 1
+    assert "1 deal finished" in page.locator("#stats").inner_text()
+
+
+def test_counting_seat_is_offered_only_where_it_exists(page):
+    page.goto(f"{page.base_url}/#hearts")
+    page.wait_for_selector("[data-game=hearts].selected")
+    assert page.locator("[data-mode=agent_vs_counting]").count() == 1
+    assert page.locator("select[data-seat='1'] option[value=counting]").count() == 1
+    page.goto(f"{page.base_url}/#poker")
+    page.wait_for_selector("[data-game=poker].selected")
+    assert page.locator("[data-mode=agent_vs_counting]").count() == 0
+    assert page.locator("select[data-seat='1'] option[value=counting]").count() == 0

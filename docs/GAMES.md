@@ -1,6 +1,6 @@
 # The Games
 
-This guide covers the seven games in the project. For each one it gives the rules as implemented, how to play it in the web app, how the rule-based **System** bot plays, and how the trained **agent** works.
+This guide covers the eight games in the project. For each one it gives the rules as implemented, how to play it in the web app, how the rule-based **System** bot plays, and how the trained **agent** works.
 
 The rules engines in `card_games_rl/games/<game>/rules.py` are the source of truth. The technical specification (observations, actions, rewards) is in [ENV_DESIGN.md](ENV_DESIGN.md).
 
@@ -13,6 +13,7 @@ The rules engines in `card_games_rl/games/<game>/rules.py` are the source of tru
 | 5 | Bluff | 4 | Competitive, deception | Reinforcement learning (PPO, self-play) |
 | 6 | Hearts | 4 | Competitive, trick-taking | Reinforcement learning (PPO, self-play) |
 | 7 | Donkey | 4 | Competitive, shedding | Reinforcement learning (PPO, self-play) |
+| 8 | Canasta | 4 (2 partnerships) | Competitive, partnership melding | Reinforcement learning (PPO, self-play, card counting) |
 
 **Play modes**, available for every game:
 
@@ -251,6 +252,52 @@ Click three cards to pass, then click a legal card to play; illegal cards are di
   - the current trick;
   - each player's card count, known void suits and known cards.
 - **Result:** the Donkey in 16.5% ± 1.5 of held-out test games against three System bots (target ≤ 18%; a fair share is 25%).
+
+---
+
+## 8. Canasta (four players, two partnerships)
+
+**Goal:** score more than the other partnership. Points come from melded cards, canastas, red threes and going out; cards left in hand count against you. The first side to 5,000 wins the match.
+
+### Rules (classic partnership Canasta)
+
+- **Cards:** two decks plus 4 jokers, 108 cards. Each player gets 11. Partners sit opposite each other.
+- **Wild cards:** jokers and 2s.
+- **Red threes** are bonus cards. They are laid out as soon as they are dealt or drawn and replaced from the stock: +100 each, +800 for all four, and negative if the side never melds.
+- **A turn:** draw from the stock or take the whole discard pile; meld; discard one card.
+- **Melds:** 3 or more cards of one rank (4 to Ace), with at least 2 natural cards and at most 3 wild cards. A side has one meld per rank, and either partner can add to it. A meld of 7 or more is a **canasta**: natural (no wild cards) +500, mixed +300.
+- **Opening meld:** a side's first melds in a hand must be worth a minimum set by its match score: 15 below zero, 50 up to 1,495, 90 up to 2,995, 120 from 3,000.
+
+| Card | Points |
+|---|---|
+| Joker | 50 |
+| 2, Ace | 20 |
+| King to 8 | 10 |
+| 7 to 4, black 3 | 5 |
+
+- **Taking the pile:** the top card must be melded at once with cards from the hand.
+  - The pile is **frozen** for everyone once a wild card or red three is in it, and for a side that hasn't melded yet. A frozen pile needs a natural pair matching the top card.
+  - An unfrozen pile can also be taken with one natural and one wild card, or by adding the top card to the side's meld of that rank.
+  - A black three or a wild card on top can't be taken.
+  - Before a side has melded, the top card plus cards from the hand must reach the opening minimum before the rest of the pile is picked up.
+- **Black threes** block the next player when discarded, and can be melded only when going out.
+- **Going out** needs at least one canasta in the side: meld every card, or all but one and discard it. +100, or +200 if *concealed* (the whole hand melded in one turn by a player who had melded nothing before).
+- **End of hand:** someone goes out, or the stock runs out and the player to draw can't take the pile.
+
+### In the app
+
+- Click a card in your hand: the melds, adds and discard it allows appear below it. "All legal moves" lists every move.
+- Each side's melds are shown in a strip, with canastas marked natural or mixed. The pile shows whether it is frozen or blocked.
+- Hands continue as a match; the scoreboard keeps each side's total, and the opening minimum follows it.
+
+### System and agent
+
+- **System bot:**
+  - Takes the pile when it has four or more cards or extends a meld.
+  - Melds natural cards whenever possible, and spends wild cards only to complete a canasta, reach the opening minimum or go out.
+  - Discards a black three first, never a rank the opponents could add to an unfrozen pile, and throws a wild card only to freeze a big pile.
+- **Agent:** PPO with self-play: one policy plays all four seats, so partners share a brain. Its observation includes the hand, every meld on the table, the pile (contents, frozen or blocked), card counts and the match score. It also includes **card counting from the start**: unseen copies of each kind, the cards each player is known to hold from pile pickups, and for each possible discard the chance the next opponent could take the pile with it. The reward is the side's score difference for the hand, plus potential-based shaping for melded points and canastas in progress. Evaluation plays the agent in both seats of a side.
+- **Result:** not trained yet. The target is +150 points per hand above a System partnership; the System partnership beats random players by more than 300 points per hand.
 
 ---
 

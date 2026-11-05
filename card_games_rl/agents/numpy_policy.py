@@ -45,7 +45,7 @@ class NumpyPolicy(Policy):
 
     _ACTIVATIONS = {"tanh": np.tanh, "relu": lambda x: np.maximum(x, 0.0)}
 
-    def __init__(self, path: str | Path, deterministic: bool = False, seed: int | None = None):
+    def __init__(self, path: str | Path, deterministic: bool = False, seed: int | None = None, encoder=None):
         with np.load(path) as data:
             layers = int(data["layers"])
             self.layers = [(data[f"W{i}"].astype(np.float32), data[f"b{i}"].astype(np.float32)) for i in range(layers)]
@@ -53,9 +53,10 @@ class NumpyPolicy(Policy):
             self.activation = self._ACTIVATIONS[str(data["activation"])]
         self.deterministic = deterministic
         self.rng = random.Random(seed)
+        self.encoder = encoder  # None: the engine's own observation
 
     def probabilities(self, game: Game, player: int) -> np.ndarray:
-        h = np.clip(game.observation(player), 0.0, 1.0).astype(np.float32)
+        h = self.encoder(game, player) if self.encoder else np.clip(game.observation(player), 0.0, 1.0).astype(np.float32)
         for weight, bias in self.layers:
             h = self.activation(weight @ h + bias)
         logits = (self.head[0] @ h + self.head[1]).astype(np.float64)

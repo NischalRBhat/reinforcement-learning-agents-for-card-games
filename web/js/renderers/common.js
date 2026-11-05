@@ -1,7 +1,7 @@
 // Pieces shared by the game renderers.
 import { cardEl, h } from "../cards.js";
 
-export const AVATARS = { human: "You", agent: "AI", system: "S", random: "R" };
+export const AVATARS = { human: "You", agent: "AI", counting: "CA", system: "S", random: "R" };
 
 /** Buttons for legal actions (only on the human's turn). */
 export function actionBar(ctx, legal = ctx.board.view.legal_actions, className = "") {

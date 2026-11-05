@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from card_games_rl.encoders import COUNTING, variants_for
 from card_games_rl.games import GAME_SPECS
 
 from .sessions import CONTROLLERS, MODES, AgentCache, SessionError, SessionStore
@@ -23,7 +24,8 @@ WEB_DIR = Path(__file__).resolve().parents[2] / "web"
 MODE_LABELS = {
     "solo": {"human_vs_system": "Play", "human_vs_agent": "Duel vs Agent", "agent_vs_agent": "Watch Agent"},
     "dealer": {"human_vs_system": "Play vs Dealer", "human_vs_agent": "Duel vs Agent", "agent_vs_agent": "Watch Agent"},
-    "competitive": {"human_vs_system": "Human vs System", "human_vs_agent": "Human vs Agent", "agent_vs_agent": "Agent vs Agent"},
+    "competitive": {"human_vs_system": "Human vs System", "human_vs_agent": "Human vs Agent", "agent_vs_agent": "Agent vs Agent",
+                    "agent_vs_counting": "Agent vs Counting agent"},
 }
 
 
@@ -67,6 +69,15 @@ def create_app(model_root: Path | None = None, agents: AgentCache | None = None,
     app.state.store = store
     app.state.agents = agents
 
+    @app.middleware("http")
+    async def revalidate_static(request, call_next):
+        # Without this, browsers reuse old copies of the JS/CSS after an update. "no-cache"
+        # still allows caching, but makes the browser check the ETag first (a cheap 304).
+        response = await call_next(request)
+        if not request.url.path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
     def run(session_id: str, fn) -> dict[str, Any]:
         try:
             session = store.get(session_id)
@@ -83,12 +94,18 @@ def create_app(model_root: Path | None = None, agents: AgentCache | None = None,
     def health() -> dict[str, Any]:
         return {"ok": True, "sessions": len(store)}
 
+    def modes(spec) -> list[str]:
+        counting = COUNTING in variants_for(spec.game_id) and spec.category == "competitive"
+        return list(spec.modes) + (["agent_vs_counting"] if counting else [])
+
     @app.get("/api/games")
     def games() -> list[dict[str, Any]]:
         return [
             {"id": spec.game_id, "name": spec.name, "category": spec.category, "description": spec.description,
-             "players": spec.max_players, "modes": [{"id": m, "label": MODE_LABELS[spec.category][m]} for m in spec.modes],
-             "controllers": list(CONTROLLERS), "agent": agents.status(spec.game_id)}
+             "players": spec.max_players,
+             "modes": [{"id": m, "label": MODE_LABELS[spec.category][m]} for m in modes(spec)],
+             "controllers": [c for c in CONTROLLERS if c != "counting" or COUNTING in variants_for(spec.game_id)],
+             "agent": agents.status(spec.game_id), "agents": agents.statuses(spec.game_id)}
             for spec in GAME_SPECS.values()
         ]
 

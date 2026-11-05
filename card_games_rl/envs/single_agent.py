@@ -15,6 +15,7 @@ import numpy as np
 from gymnasium import spaces
 
 from card_games_rl.core.seeds import training_seed
+from card_games_rl.encoders import BASE, get_encoder
 from card_games_rl.games import make_game
 
 from .opponents import OpponentSampler, heuristic_opponents
@@ -31,17 +32,20 @@ class SingleAgentEnv(gym.Env):
         shaping_weight: float | None = None,
         learner_seat: int | None = None,
         game_kwargs: dict | None = None,
+        variant: str = BASE,
     ):
         super().__init__()
         self.game_id = game_id
         self.game = make_game(game_id, seed=seed, **(game_kwargs or {}))
+        # What the learner sees: the engine's observation, or that plus card counting.
+        self.encoder = get_encoder(game_id, variant)
         self.opponent_sampler = opponents or heuristic_opponents(game_id, seed)
         self.shaping_weight = self.game.shaping_weight if shaping_weight is None else shaping_weight
         self.fixed_seat = learner_seat
         # Masked agents never send illegal actions. "random" (replace with a
         # random legal move) exists only for unmasked tools such as check_env.
         self.illegal_action_mode = "raise"
-        self.observation_space = spaces.Box(0.0, 1.0, shape=(self.game.obs_size,), dtype=np.float32)
+        self.observation_space = spaces.Box(0.0, 1.0, shape=(self.encoder.size,), dtype=np.float32)
         self.action_space = spaces.Discrete(self.game.num_actions)
         self.seat = 0
         self.opponents = {}
@@ -51,7 +55,7 @@ class SingleAgentEnv(gym.Env):
 
     # ------------------------------------------------------------------
     def _observe(self) -> np.ndarray:
-        return np.clip(self.game.observation(self.seat), 0.0, 1.0).astype(np.float32, copy=False)
+        return self.encoder(self.game, self.seat)
 
     def _advance_opponents(self) -> None:
         game = self.game

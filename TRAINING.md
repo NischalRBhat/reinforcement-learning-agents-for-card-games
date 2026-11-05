@@ -17,6 +17,12 @@ Run these from the project root in PowerShell. They use the project venv directl
 
 Add `--games klondike poker` (for example) to train only some games.
 
+Canasta is the slowest game to train (long hands, four seats), so give it its own longer run:
+
+```powershell
+.\.venv\Scripts\python.exe -m card_games_rl.training.train --game canasta --profile full --time-budget 6h
+```
+
 Each game's config chooses its method (`algorithm` in `training/configs/<game>.yaml`):
 
 | Game | Method | What happens | Device |
@@ -25,6 +31,7 @@ Each game's config chooses its method (`algorithm` in `training/configs/<game>.y
 | Klondike | MaskablePPO | warm start from the System bot, then PPO | GPU if available |
 | Bluff, Hearts, Donkey | MaskablePPO self-play | warm start, then PPO against a pool of past versions plus System bots | CPU |
 | Poker | **Monte Carlo CFR** | 4 worker processes; merged, evaluated against the System bot and saved every 20 minutes | CPU |
+| Canasta | MaskablePPO self-play | warm start, then PPO; partners share one policy; card counting built into the observation | CPU |
 | Rummy | **look-ahead search** | no weights: validated against the System bot and registered in about 3 minutes | CPU |
 
 For the PPO games:
@@ -42,6 +49,17 @@ To train just some games, or continue after a stop:
 .\.venv\Scripts\python.exe -m card_games_rl.training.train --all --games poker hearts --profile full --time-budget 2h
 .\.venv\Scripts\python.exe -m card_games_rl.training.train --game klondike --profile full --time-budget 1h --resume
 ```
+
+## 1b. Card-counting agents (a second agent per game)
+
+Donkey, Hearts and Bluff each get a second PPO agent that also sees card-counting features. Rummy gets a counting version of its search. They train into `models/<game>-counting/` and never replace the current agents, so the two can be compared:
+
+```powershell
+.\.venv\Scripts\python.exe -m card_games_rl.training.train --all --variant counting --profile full --time-budget 3h
+.\.venv\Scripts\python.exe -m card_games_rl.training.evaluate --all --variant counting
+```
+
+The evaluation reports each counting agent against the System bot (same gates) and **head-to-head against the current agent** on duplicate deals. The features are described in `docs/ENV_DESIGN.md` §9.
 
 ## 2. Monitor (optional, second terminal)
 
@@ -82,6 +100,7 @@ These are checked by `evaluate`; the details are in `docs/ENV_DESIGN.md`.
 | Bluff | win rate vs 3 heuristics | ≥ 30% (fair share 25%) |
 | Hearts | points per hand vs 3 heuristics | ≤ 6.0 (fair share 6.5) |
 | Donkey | share of games as the Donkey vs 3 heuristics | ≤ 18% (fair share 25%) |
+| Canasta | points per hand above a System partnership | ≥ +150 (System vs System = 0) |
 
 ## Hyperparameters
 

@@ -1,8 +1,8 @@
 # Card Games RL
 
-Seven card games with correct rules engines, AI agents trained by reinforcement learning, game-theory solving and search, and a browser table where you can play them, play against them or watch them play each other.
+Eight card games with correct rules engines, AI agents trained by reinforcement learning, game-theory solving and search, and a browser table where you can play them, play against them or watch them play each other.
 
-**Games:** Blackjack · Klondike Solitaire · Texas Hold'em (heads-up no-limit) · Rummy · Bluff · Hearts · Donkey
+**Games:** Blackjack · Klondike Solitaire · Texas Hold'em (heads-up no-limit) · Rummy · Bluff · Hearts · Donkey · Canasta
 
 Each game has a hand-written **System** bot as a baseline and a trained **agent**. The agent's method is chosen to suit the game:
 
@@ -15,6 +15,7 @@ Each game has a hand-written **System** bot as a baseline and a trained **agent*
 | Bluff | 4 | PPO self-play | 89.9% ± 1.8 wins vs 3 System bots (fair share 25%) | ✅ ≥ 30% |
 | Hearts | 4 | PPO self-play | 5.55 ± 0.32 points per hand vs 3 System bots (bot vs itself 6.79) | ✅ ≤ 6.0 |
 | Donkey | 4 | PPO self-play | the Donkey in 16.5% ± 1.5 of games vs 3 System bots (fair share 25%) | ✅ ≤ 18% |
+| Canasta | 4 (partnerships) | PPO self-play + card counting | not trained yet | target +150 points/hand |
 
 These come from `evaluate --all` on test deals that training never saw. Multi-player games use **duplicate deals**: each deal is replayed with the agent in every seat, so the luck of the cards cancels out. Poker scored +25.9 bb/100 on its validation hands during training. Its test result is lower and very noisy (hands in which both players randomise vary a lot), so it needs a longer run or more test hands to be settled. Klondike's agent still plays worse than the System bot.
 
@@ -24,7 +25,7 @@ The full rules, how to play each game, and how each bot and agent works are in *
 
 ## Features
 
-- **Rules engines** for all seven games: pure Python, seeded and deterministic, with masked legal actions and hidden information enforced per player. One engine drives training, evaluation, the API and the UI.
+- **Rules engines** for all eight games: pure Python, seeded and deterministic, with masked legal actions and hidden information enforced per player. One engine drives training, evaluation, the API and the UI.
 - **Gymnasium environments** with a learner seat and configurable opponents, including a self-play pool of past agent versions.
 - **Agents:**
   - MaskablePPO with behaviour-cloning warm starts;
@@ -44,6 +45,16 @@ The full rules, how to play each game, and how each bot and agent works are in *
   - an agent insight panel showing the agent's top choices with probabilities;
   - in-app rules, playback controls, scoreboard, move history and keyboard shortcuts.
 - **Tests:** about 270 in all: rules scenarios, randomized fuzzing of game invariants, environment checks, training smoke runs, API play-throughs, and browser end-to-end tests.
+
+## Card-counting agents
+
+Donkey, Hearts, Bluff and Rummy each have a **second agent that counts cards**. Using only what a player may legally know, it works out:
+- which suits are still safe to lead;
+- the chance a card ends up picking up the trick (Donkey) or winning it (Hearts);
+- how many copies of a claimed rank can still exist (Bluff);
+- what the opponent is collecting (Rummy).
+
+The counting agents are trained alongside the current ones, not instead of them. In the app you can seat both at one table with the **Agent vs Counting agent** mode, and `evaluate --variant counting` reports a head-to-head on duplicate deals. Details: [docs/ENV_DESIGN.md](docs/ENV_DESIGN.md) §9.
 
 ## Quick start
 
@@ -70,7 +81,7 @@ Trained model weights are not stored in the repository. Until you train, agent s
 | Blackjack | You vs the dealer | Duel: you and the agent on the same shoe | Watch the agent |
 | Klondike | Play solo | Duel on the same deal | Watch the agent |
 | Poker, Rummy | You vs the System bot | You vs the agent | Agent vs agent |
-| Bluff, Hearts, Donkey | You + 3 System bots | You + 3 agents | 4 agents (any mix) |
+| Bluff, Hearts, Donkey, Canasta | You + 3 System bots | You + 3 agents | 4 agents (any mix) |
 
 **How to play** (button or H) opens each game's full rules beside the table. **Agent insight** shows what each computer player chose and the agent's top alternatives. At a table with you, those alternatives are hidden, because they could reveal the agent's cards.
 
@@ -116,8 +127,9 @@ The full technical specification (observation layouts, action spaces, reward tab
 
 ```
 card_games_rl/
-  core/          cards, Game contract, Policy interface, seeds
-  games/<game>/  rules.py (engine + observation), bots.py (System bot), plus blackjack/optimal.py,
+  core/          cards, Game contract, Policy interface, seeds, counting maths
+  encoders.py    observation encoders: base, and base + card counting
+  games/<game>/  rules.py (engine + observation), bots.py (System bot), counting.py (counting features), plus blackjack/optimal.py,
                  klondike/solver.py, poker/cfr.py, rummy/search.py
   envs/          Gymnasium single-agent wrapper, self-play opponent pool
   agents/        trained-model policy, model registry

@@ -28,7 +28,8 @@ def teacher_for(game_id: str, seed: int = 0) -> Policy:
 def collect(game_id: str, config: dict[str, Any], episodes: int, seed: int = 0) -> dict[str, np.ndarray]:
     """Teacher trajectories from the learner's point of view (same rewards as training)."""
     opponents = heuristic_opponents(game_id, seed) if GAME_SPECS[game_id].max_players > 1 else None
-    env = SingleAgentEnv(game_id, opponents=opponents, seed=seed, game_kwargs=config.get("game_kwargs") or {})
+    env = SingleAgentEnv(game_id, opponents=opponents, seed=seed, game_kwargs=config.get("game_kwargs") or {},
+                         variant=config.get("variant", "base"))
     teacher = teacher_for(game_id, seed)
     gamma = config["ppo"]["gamma"]
     observations, masks, actions, returns = [], [], [], []

@@ -20,12 +20,14 @@ def build_env(spec: dict[str, Any]):
     game_id, seed = spec["game_id"], spec["seed"]
     kind = spec.get("opponents")
     if kind == "pool":
-        opponents = OpponentPool(game_id, Path(spec["pool_dir"]), mix=spec.get("opponent_mix"), seed=seed)
+        opponents = OpponentPool(game_id, Path(spec["pool_dir"]), mix=spec.get("opponent_mix"), seed=seed,
+                                 variant=spec.get("variant", "base"))
     elif kind == "heuristic":
         opponents = heuristic_opponents(game_id, seed)
     else:
         opponents = None
-    return SingleAgentEnv(game_id, opponents=opponents, seed=seed, game_kwargs=spec.get("game_kwargs") or {})
+    return SingleAgentEnv(game_id, opponents=opponents, seed=seed, game_kwargs=spec.get("game_kwargs") or {},
+                          variant=spec.get("variant", "base"))
 
 
 def run(remote, spec: dict[str, Any]) -> None:
