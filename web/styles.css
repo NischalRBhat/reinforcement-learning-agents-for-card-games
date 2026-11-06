@@ -602,7 +602,7 @@ button.slot:hover:not(:disabled) { background: rgba(0, 0, 0, 0.2); border-color:
 .rule-body { padding: 0 14px 12px; color: var(--text-2); display: flex; flex-direction: column; gap: 8px; }
 .rule-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
 .rule-list li::marker { color: var(--accent); }
-.rule-table { display: grid; grid-template-columns: minmax(90px, max-content) 1fr; gap: 6px 14px; margin: 0; }
+.rule-table { display: grid; grid-template-columns: fit-content(40%) 1fr; gap: 6px 14px; margin: 0; }
 .rule-table dt { color: var(--text); font-weight: 600; }
 .rule-table dd { margin: 0; }
 @keyframes slide-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
