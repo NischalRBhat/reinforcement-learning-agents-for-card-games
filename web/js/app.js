@@ -285,7 +285,7 @@ function speed() {
 }
 
 function pendingBoards() {
-  return app.session ? app.session.boards.flatMap((b, i) => (!b.done && !b.human_turn ? [i] : [])) : [];
+  return app.session ? app.session.boards.flatMap((b, i) => (!b.done && !b.human_turn && !b.waiting ? [i] : [])) : [];
 }
 
 function canAutoNext() {
@@ -447,7 +447,10 @@ function render() {
     return h("article", { class: `board ${board.human_turn ? "your-turn" : ""} ${board.done ? "finished" : ""}`, dataset: { board: index } },
       title ? h("header", { class: `board-head ctl-${controller}` },
         h("span", { class: "avatar sm", "aria-hidden": "true" }, AVATARS[controller]), h("h3", { class: "board-title" }, title),
-        board.done ? h("span", { class: "pill" }, "Finished") : board.human_turn ? h("span", { class: "pill accent" }, "Your move") : null) : null,
+        board.done ? h("span", { class: "pill" }, "Finished") : board.human_turn ? h("span", { class: "pill accent" }, "Your move")
+          : board.waiting ? h("span", { class: "pill" }, "Plays after you") : null) : null,
+      board.waiting ? h("p", { class: "board-note" },
+        "The agent gets the same cards, so it plays this deal once you finish. Its moves can't give anything away.") : null,
       root);
   }));
   animateNewCards(boardsEl);

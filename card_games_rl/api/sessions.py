@@ -318,11 +318,19 @@ class Session:
         played = []
         for index in indices:
             board = self.board(index)
+            if self._waiting(board):
+                continue
             while len(played) < min(steps, MAX_ADVANCE) and not board.game.done and not board.human_turn:
                 played.append({"board": index, **self._bot_move(board)})
             if played:
                 break
         return played
+
+    def _waiting(self, board: Board) -> bool:
+        """In a duel the agent's board holds still until the human's deal is over: both play
+        the same shoe or deal, so its moves would show the human cards still to come."""
+        return board.human_seat is None and any(
+            b is not board and b.human_seat is not None and not b.game.done for b in self.boards)
 
     def _bot_move(self, board: Board) -> dict[str, Any]:
         game = board.game
@@ -417,6 +425,7 @@ class Session:
             "fallback": board.agent_fallback,
             "human_seat": board.human_seat,
             "human_turn": board.human_turn,
+            "waiting": self._waiting(board),
             "current_player": game.current_player,
             "done": game.done,
             "truncated": game.is_truncated,

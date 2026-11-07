@@ -296,6 +296,25 @@ def test_undo_is_refused_in_duels_and_multiplayer_games(client):
         assert client.post(f"/api/sessions/{state['id']}/undo", json={"board": 0}).status_code == 409
 
 
+@pytest.mark.parametrize("game", ["blackjack", "klondike"])
+def test_duel_agent_waits_until_the_human_deal_is_over(client, game):
+    # Both boards share the shoe or deal, so agent moves would show the human cards to come.
+    state = create(client, game, "human_vs_agent", seed=3)
+    sid = state["id"]
+    first_view = state["boards"][1]["view"]
+    assert state["boards"][1]["waiting"] and not state["boards"][0]["waiting"]
+    state = client.post(f"/api/sessions/{sid}/advance", json={"board": 1, "steps": 50}).json()
+    assert state["advanced"] == [] and not state["boards"][1]["moves"]
+    assert state["boards"][1]["view"] == first_view
+    rng = random.Random(0)
+    while not state["boards"][0]["done"]:   # finish the human deal: the agent may now play
+        legal = state["boards"][0]["view"]["legal_actions"]
+        state = client.post(f"/api/sessions/{sid}/action", json={"board": 0, "action": rng.choice(legal)["action"]}).json()
+    assert not state["boards"][1]["waiting"]
+    state = client.post(f"/api/sessions/{sid}/advance", json={"board": 1, "steps": 1}).json()
+    assert state["boards"][1]["done"] or state["advanced"]
+
+
 def test_klondike_solver_answers_only_after_the_deal(client):
     state = create(client, "klondike", "agent_vs_agent")
     sid = state["id"]
