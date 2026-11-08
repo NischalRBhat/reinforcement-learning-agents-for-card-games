@@ -83,7 +83,7 @@ def start(page, game, mode, instant=False, auto_next=False):
     page.wait_for_selector(f"[data-game={game}].selected")
     page.click(f"[data-mode={mode}]")
     if instant:
-        page.eval_on_selector("#speed", "el => { el.value = 4; el.dispatchEvent(new Event('input')); }")
+        page.eval_on_selector("#speed", "el => { el.value = 10; el.dispatchEvent(new Event('input')); }")
     if not auto_next:
         page.uncheck("#auto-next")
     page.click("#start")

@@ -267,8 +267,8 @@ body.paused[data-phase=bots] .status-pill .dot { background: var(--warn); animat
 .playback { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .playback .ico { display: inline-flex; }
 #pause[aria-pressed=true] { border-color: var(--warn); color: var(--warn); }
-.speed { display: grid; grid-template-columns: auto 1fr 58px; align-items: center; gap: 10px; }
-.speed-value { text-align: right; color: var(--text-2); font-size: 12px; }
+.speed { display: grid; grid-template-columns: auto 1fr 24px; align-items: center; gap: 10px; }
+.speed-value { text-align: right; color: var(--text); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .switch { display: flex; align-items: center; gap: 10px; color: var(--text-2); font-size: 13px; cursor: pointer; }
 .switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .switch .track { width: 32px; height: 18px; border-radius: 999px; background: var(--surface-3); border: 1px solid var(--border-strong); position: relative; flex: none; transition: background 0.15s; }

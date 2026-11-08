@@ -6,8 +6,8 @@ import { GAME_META, GUIDES, RULES, SHORTCUTS } from "./guide.js";
 import { AVATARS } from "./renderers/common.js";
 import { RENDERERS } from "./renderers/index.js";
 
-const SPEEDS = [1200, 700, 350, 120, 0]; // ms between computer moves
-const SPEED_NAMES = ["Slow", "Relaxed", "Normal", "Fast", "Instant"];
+// Speed 1 (slowest) to 10 (instant): milliseconds between computer moves.
+const SPEEDS = [2000, 1400, 1000, 700, 500, 350, 220, 120, 50, 0];
 const AUTO_NEXT_MS = 4000;
 const ICONS = {
   pause: `<svg viewBox="0 0 16 16" width="14" height="14"><rect x="3" y="2" width="3.5" height="12" rx="1" fill="currentColor"/><rect x="9.5" y="2" width="3.5" height="12" rx="1" fill="currentColor"/></svg>`,
@@ -280,8 +280,9 @@ function stopTimer() {
   app.autoAt = null;
 }
 
+/** Index into SPEEDS for the slider value 1–10. */
 function speed() {
-  return Number($("#speed").value);
+  return Number($("#speed").value) - 1;
 }
 
 function pendingBoards() {
@@ -302,7 +303,8 @@ function schedule() {
   if (pending.length) {
     // A renderer may ask for a pause so a finished trick can be read (shorter when fast, none at Instant).
     const hold = Math.max(0, ...pending.map((i) => RENDERERS[session.game].holdAfter?.(session.boards[i]) ?? 0));
-    const scale = [1, 1, 1, 0.6, 0][speed()];
+    const delay = SPEEDS[speed()];
+    const scale = delay === 0 ? 0 : delay <= 120 ? 0.6 : 1;
     if (!app.paused) app.timer = setTimeout(tick, SPEEDS[speed()] + hold * scale);
   } else if (canAutoNext()) {
     app.autoAt = Date.now() + AUTO_NEXT_MS;
@@ -687,7 +689,14 @@ function wireControls() {
   $("#cancel-auto").addEventListener("click", () => { app.autoCancelled = true; schedule(); });
   $("#pause").addEventListener("click", () => setPaused(!app.paused));
   $("#step").addEventListener("click", () => { stopTimer(); tick(); });
-  const speedLabel = () => { $("#speed-label").textContent = SPEED_NAMES[speed()]; };
+  const speedLabel = () => {
+    const delay = SPEEDS[speed()];
+    const pace = delay ? `about ${(1000 / delay).toFixed(delay > 1000 ? 1 : 0)} moves per second` : "instant";
+    const slider = $("#speed");
+    $("#speed-label").textContent = slider.value;
+    slider.setAttribute("aria-valuetext", `${slider.value} of 10, ${pace}`);
+    slider.title = `Speed ${slider.value} of 10: ${pace}`;
+  };
   $("#speed").addEventListener("input", () => { speedLabel(); schedule(); });
   $("#auto-next").addEventListener("change", () => { app.autoCancelled = false; schedule(); });
   $("#help-open").addEventListener("click", openHelp);
