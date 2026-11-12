@@ -1,0 +1,30 @@
+{
+  "game": "bluff",
+  "variant": "counting",
+  "obs_version": 2,
+  "updated_at": "2026-11-06T18:41:09",
+  "algorithm": "MaskablePPO",
+  "profile": "full",
+  "timesteps": 500000,
+  "seed": 0,
+  "deterministic": true,
+  "net_arch": [
+    256,
+    256
+  ],
+  "validation": {
+    "metric": "win_rate",
+    "value": 0.713,
+    "ci95": 0.029623748315448336,
+    "mean_return": 0.6173333333333334,
+    "episodes": 1000,
+    "deals": 250,
+    "higher_is_better": true
+  },
+  "reference": null,
+  "gate": {
+    "threshold": 0.3,
+    "passed": true
+  },
+  "counting_version": 1
+}
