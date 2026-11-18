@@ -28,7 +28,8 @@ def check_state(game: Game) -> None:
         deck = game.all_cards()
     except NotImplementedError:
         return
-    expected = Counter(range(52)) if len(deck) <= 52 else None
+    unique = getattr(game, "unique_cards", 52)  # Canasta: 108 distinct card ids
+    expected = Counter(range(unique)) if len(deck) <= unique else None
     counts = Counter(deck)
     if expected is not None:
         assert counts == expected, "card conservation violated"

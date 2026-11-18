@@ -1,7 +1,7 @@
 // Pieces shared by the game renderers.
 import { cardEl, h } from "../cards.js";
 
-export const AVATARS = { human: "You", agent: "AI", system: "S", random: "R" };
+export const AVATARS = { human: "You", agent: "AI", counting: "CA", system: "S", random: "R" };
 
 /** Buttons for legal actions (only on the human's turn). */
 export function actionBar(ctx, legal = ctx.board.view.legal_actions, className = "") {
@@ -58,6 +58,20 @@ export function prompt(ctx, text) {
 /** Replace the engines' "P1".."P4" in log text with the seat names shown on screen. */
 export function named(ctx, text) {
   return text ? text.replace(/\bP([1-4])\b/g, (_, n) => ctx.seatName(Number(n) - 1)) : text;
+}
+
+/** The decisions made so far this deal, oldest first; the newest is highlighted. */
+export function moveTrail(ctx, moves) {
+  const byName = new Set(moves.map((m) => m.seat)).size > 1;
+  return h("div", { class: "move-trail", "aria-label": "Moves this deal" },
+    h("span", { class: "trail-label" }, `${byName ? "Moves" : ctx.seatName(moves[0].seat)}:`),
+    moves.map((m, i) => h("span", { class: `move-chip ${i === moves.length - 1 ? "fresh" : ""}` },
+      byName ? `${ctx.seatName(m.seat)} ${m.label}` : m.label)));
+}
+
+/** A speech bubble with a seat's latest action (dimmed when it is from an earlier street). */
+export function actionBubble(text, current = true) {
+  return text ? h("div", { class: `action-bubble ${current ? "" : "stale"}` }, text) : null;
 }
 
 /** A result banner on the felt: tone is "win", "loss" or "". */

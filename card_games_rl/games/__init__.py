@@ -35,6 +35,7 @@ GAME_SPECS: dict[str, GameSpec] = {
         GameSpec("rummy", "Rummy", "competitive", "Two-player basic 10-card rummy: sets and runs, go out to win.", 2, 2),
         GameSpec("bluff", "Bluff", "competitive", "Four-player Cheat: claim ranks face-down, call out liars.", 4, 4),
         GameSpec("hearts", "Hearts", "competitive", "Four-player Black Lady hearts with passing and shooting the moon.", 4, 4),
+        GameSpec("canasta", "Canasta", "competitive", "Four players in two partnerships: meld ranks, build canastas, jokers and 2s wild.", 4, 4),
         GameSpec("donkey", "Donkey", "competitive", "Gadha Ladam: follow suit to discard, cut to make others pick up; don't be the last one holding cards.", 4, 4),
     )
 }

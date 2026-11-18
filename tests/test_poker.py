@@ -122,3 +122,17 @@ def _bb_per_100(hero, villain, hands=3000):
 def test_heuristic_beats_random_and_calling_station():
     assert _bb_per_100(HeuristicPolicy(0), RandomPolicy(1)) > 20
     assert _bb_per_100(HeuristicPolicy(0), CallingStation()) > 0
+
+
+def test_last_actions_are_tagged_by_street():
+    from card_games_rl.games import make_game
+    from card_games_rl.games.poker.rules import CALL
+
+    game = make_game("poker", seed=3, button=0)
+    game.step(CALL)   # the button completes the small blind
+    game.step(CALL)   # the big blind checks: on to the flop
+    actions = game.view(None)["last_actions"]
+    assert actions[0]["text"] == "calls 1" and actions[1]["text"] == "checks"
+    assert not actions[0]["current"] and not actions[1]["current"] and actions[0]["street"] == "preflop"
+    game.step(CALL)   # big blind checks on the flop
+    assert game.view(None)["last_actions"][1] == {"text": "checks", "street": "flop", "current": True}

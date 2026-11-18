@@ -180,6 +180,24 @@ class HeartsGame(Game):
     def action_label(self, action: int) -> str:
         return f"{'Pass' if self.passing else 'Play'} {label(action)}"
 
+    def public_label(self, action: int) -> str:
+        # Passed cards are private: the others only see that a card was chosen.
+        return "Pass a card" if self.passing else self.action_label(action)
+
+    def _passes_view(self, viewer: int | None) -> list[dict[str, Any]] | None:
+        """Who passed to whom once the exchange is done. The cards are shown only to the
+        passer and the receiver (and to everyone when the hand is over)."""
+        if self.passing or self.direction == PASS_NONE:
+            return None
+        offset = PASS_OFFSETS[self.direction]
+        passes = []
+        for player in range(4):
+            target = (player + offset) % 4
+            known = self.done or viewer in (player, target)
+            passes.append({"from": player, "to": target, "count": len(self.pass_picks[player]),
+                           "cards": [card_json(c) for c in self.pass_picks[player]] if known else None})
+        return passes
+
     def view(self, viewer: int | None) -> dict[str, Any]:
         legal = self.legal_actions() if viewer is not None and viewer == self.current_player else []
         return {
@@ -191,6 +209,7 @@ class HeartsGame(Game):
             "hands": [[card_json(c) for c in h] if p == viewer or self.done else len(h) for p, h in enumerate(self.hands)],
             "pass_picks": [card_json(c) for c in self.pass_picks[viewer]] if viewer is not None else [],
             "received": [card_json(c) for c in self.received[viewer]] if viewer is not None else [],
+            "passes": self._passes_view(viewer),
             "trick": [{"player": p, "card": card_json(c)} for p, c in self.trick],
             "last_trick": [{"player": p, "card": card_json(c)} for p, c in self.last_trick],
             "last_winner": self.last_winner,

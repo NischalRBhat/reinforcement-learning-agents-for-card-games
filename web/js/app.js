@@ -6,21 +6,24 @@ import { GAME_META, GUIDES, RULES, SHORTCUTS } from "./guide.js";
 import { AVATARS } from "./renderers/common.js";
 import { RENDERERS } from "./renderers/index.js";
 
-const SPEEDS = [1200, 700, 350, 120, 0]; // ms between computer moves
-const SPEED_NAMES = ["Slow", "Relaxed", "Normal", "Fast", "Instant"];
+// Speed 1 (slowest) to 10 (instant): milliseconds between computer moves.
+const SPEEDS = [2000, 1400, 1000, 700, 500, 350, 220, 120, 50, 0];
 const AUTO_NEXT_MS = 4000;
 const ICONS = {
   pause: `<svg viewBox="0 0 16 16" width="14" height="14"><rect x="3" y="2" width="3.5" height="12" rx="1" fill="currentColor"/><rect x="9.5" y="2" width="3.5" height="12" rx="1" fill="currentColor"/></svg>`,
   play: `<svg viewBox="0 0 16 16" width="14" height="14"><path d="M4 2.5v11a.8.8 0 0 0 1.2.7l9-5.5a.8.8 0 0 0 0-1.4l-9-5.5A.8.8 0 0 0 4 2.5z" fill="currentColor"/></svg>`,
 };
-const CONTROLLER_NAMES = { human: "You", system: "System", agent: "Agent", random: "Random" };
-const CONTROLLER_OPTIONS = { human: "You (human)", system: "System bot", agent: "Trained agent", random: "Random" };
+const CONTROLLER_NAMES = { human: "You", system: "System", agent: "Agent", counting: "Counting agent", random: "Random" };
+const CONTROLLER_OPTIONS = { human: "You (human)", system: "System bot", agent: "Trained agent", counting: "Card-counting agent", random: "Random" };
+const VARIANT_OF = { agent: "base", counting: "counting" };   // seat controller -> agent kind
+const AGENT_TITLES = { base: "Trained agent", counting: "Card-counting agent" };
 const METRICS = {
   ev: { label: "EV per hand", short: "EV/hand", fmt: (v) => fmtSigned(v, 3) },
   win_rate: { label: "win rate", short: "win rate", fmt: (v) => `${(v * 100).toFixed(1)}%` },
   bb_per_100: { label: "big blinds per 100 hands", short: "bb/100", fmt: (v) => fmtSigned(v, 1) },
   mean_points: { label: "points per hand", short: "pts/hand", fmt: (v) => v.toFixed(2) },
   donkey_rate: { label: "of games as the Donkey", short: "Donkey rate", fmt: (v) => `${(v * 100).toFixed(1)}%` },
+  point_diff: { label: "points per hand above the other side", short: "pts/hand", fmt: (v) => fmtSigned(v, 0) },
 };
 const MODE_HELP = {
   solo: {
@@ -37,6 +40,7 @@ const MODE_HELP = {
     human_vs_system: "You against the rule-based System bot.",
     human_vs_agent: "You against the trained agent.",
     agent_vs_agent: "Watch agents play. Swap any seat for a bot or random player.",
+    agent_vs_counting: "The trained agent against the card-counting agent, in alternating seats.",
   },
 };
 
@@ -82,12 +86,27 @@ function agentChip(agent) {
         .filter(Boolean).join(" · "))));
 }
 
-function agentCard(agent) {
+/** The card-counting agent's duel with the current agent, from the evaluator's report. */
+function duelLine(agent) {
+  const duel = agent.head_to_head;
+  const metric = METRICS[duel?.metric];
+  if (!duel || !metric) return null;
+  const clear = Math.abs(duel.difference) > duel.ci95;
+  const winner = duel.a_better ? "Card counting is ahead" : "The current agent is ahead";
+  return h("p", { class: `duel-line ${clear ? (duel.a_better ? "good" : "warn") : ""}` },
+    h("strong", {}, clear ? winner : "Head-to-head: too close to call"),
+    ` · ${metric.fmt(duel.a)} vs ${metric.fmt(duel.b)} ${metric.short} over ${duel.deals.toLocaleString()} duplicate deals`);
+}
+
+function agentCard(agent, variant = "base") {
   const tone = agentTone(agent);
+  const title = AGENT_TITLES[variant];
   if (!agent?.trained) {
     return h("div", { class: "intro-card agent-card" },
-      h("h3", {}, "Trained agent"),
-      h("p", { class: "muted" }, "No compatible trained model for this game yet. In agent seats the rule-based System bot plays instead."));
+      h("h3", {}, title),
+      h("p", { class: "muted" }, variant === "base"
+        ? "No compatible trained model for this game yet. In agent seats the rule-based System bot plays instead."
+        : "Not trained yet. It learns the same game with card-counting features added; until then the System bot takes its seats."));
   }
   const metric = METRICS[agent.metric];
   const rows = [
@@ -102,13 +121,14 @@ function agentCard(agent) {
   ].filter((row) => row && row[1] != null);
   return h("div", { class: `intro-card agent-card ${tone}` },
     h("div", { class: "agent-card-head" },
-      h("h3", {}, "Trained agent"),
+      h("h3", {}, title),
       h("span", { class: `pill ${tone}` }, agent.gate_passed ? "Target met" : agent.gate_passed === false ? "Below target" : "Trained")),
     metric && agent.value != null ? h("div", { class: "big-metric" },
       h("span", { class: "value" }, metric.fmt(agent.value)),
       agent.ci95 != null ? h("span", { class: "ci" }, `± ${metric.fmt(agent.ci95).replace("+", "")}`) : null,
       h("span", { class: "unit" }, metric.label)) : null,
     h("dl", { class: "facts" }, rows.map(([k, v]) => [h("dt", {}, k), h("dd", {}, v)])),
+    duelLine(agent),
     agent.source === "validation"
       ? h("p", { class: "fine-print" }, "Validation score from training. Run the evaluator for the held-out test score.") : null);
 }
@@ -141,6 +161,7 @@ function renderGameList() {
 }
 
 function defaultSeats(game, mode) {
+  if (mode === "agent_vs_counting") return Array.from({ length: game.players }, (_, seat) => (seat % 2 ? "counting" : "agent"));
   const others = { human_vs_system: "system", human_vs_agent: "agent", agent_vs_agent: "agent" }[mode];
   const first = mode === "agent_vs_agent" ? "agent" : "human";
   return [first, ...Array(game.players - 1).fill(others)];
@@ -209,7 +230,8 @@ function renderIntro() {
       h("div", { class: "intro-cta" },
         h("button", { class: "btn btn-primary btn-lg", type: "button", id: "intro-start", onClick: start }, `Start · ${mode.label}`),
         h("span", { class: "muted" }, MODE_HELP[game.category]?.[app.mode] ?? ""))),
-    agentCard(game.agent)));
+    h("div", { class: "agent-cards" },
+      Object.entries(game.agents ?? { base: game.agent }).map(([variant, status]) => agentCard(status, variant)))));
   document.body.dataset.phase = "idle";
   document.body.classList.remove("in-session");
   setStatus("Ready");
@@ -258,12 +280,13 @@ function stopTimer() {
   app.autoAt = null;
 }
 
+/** Index into SPEEDS for the slider value 1–10. */
 function speed() {
-  return Number($("#speed").value);
+  return Number($("#speed").value) - 1;
 }
 
 function pendingBoards() {
-  return app.session ? app.session.boards.flatMap((b, i) => (!b.done && !b.human_turn ? [i] : [])) : [];
+  return app.session ? app.session.boards.flatMap((b, i) => (!b.done && !b.human_turn && !b.waiting ? [i] : [])) : [];
 }
 
 function canAutoNext() {
@@ -280,7 +303,8 @@ function schedule() {
   if (pending.length) {
     // A renderer may ask for a pause so a finished trick can be read (shorter when fast, none at Instant).
     const hold = Math.max(0, ...pending.map((i) => RENDERERS[session.game].holdAfter?.(session.boards[i]) ?? 0));
-    const scale = [1, 1, 1, 0.6, 0][speed()];
+    const delay = SPEEDS[speed()];
+    const scale = delay === 0 ? 0 : delay <= 120 ? 0.6 : 1;
     if (!app.paused) app.timer = setTimeout(tick, SPEEDS[speed()] + hold * scale);
   } else if (canAutoNext()) {
     app.autoAt = Date.now() + AUTO_NEXT_MS;
@@ -425,7 +449,10 @@ function render() {
     return h("article", { class: `board ${board.human_turn ? "your-turn" : ""} ${board.done ? "finished" : ""}`, dataset: { board: index } },
       title ? h("header", { class: `board-head ctl-${controller}` },
         h("span", { class: "avatar sm", "aria-hidden": "true" }, AVATARS[controller]), h("h3", { class: "board-title" }, title),
-        board.done ? h("span", { class: "pill" }, "Finished") : board.human_turn ? h("span", { class: "pill accent" }, "Your move") : null) : null,
+        board.done ? h("span", { class: "pill" }, "Finished") : board.human_turn ? h("span", { class: "pill accent" }, "Your move")
+          : board.waiting ? h("span", { class: "pill" }, "Plays after you") : null) : null,
+      board.waiting ? h("p", { class: "board-note" },
+        "The agent gets the same cards, so it plays this deal once you finish. Its moves can't give anything away.") : null,
       root);
   }));
   animateNewCards(boardsEl);
@@ -442,7 +469,7 @@ function renderStatus() {
   const allDone = session.boards.every((b) => b.done);
   const humanTurn = session.boards.some((b) => b.human_turn);
   let phase = "bots";
-  let text = app.paused ? "Paused" : session.boards.some((b) => b.seats.includes("agent")) ? "Agent is thinking…" : "Computer is playing…";
+  let text = app.paused ? "Paused" : session.boards.some((b) => b.seats.includes("agent") || b.seats.includes("counting")) ? "Agent is thinking…" : "Computer is playing…";
   if (allDone) { phase = "done"; text = session.match_over ? "Match over" : "Deal finished"; }
   else if (humanTurn) { phase = "human"; text = "Your turn"; }
   document.body.dataset.phase = phase;
@@ -507,11 +534,12 @@ function renderInsight() {
     el.replaceChildren(h("p", { class: "empty-note" }, "When a computer player moves, its choice and the agent's top alternatives appear here."));
     return;
   }
-  const agent = app.session.agent;
+  const variant = VARIANT_OF[move.controller];
+  const agent = (variant && app.session.agents?.[variant]) || app.session.agent;
   const game = app.games.find((g) => g.id === app.session.game);
-  const trained = move.controller === "agent" && !move.fallback;
-  const source = trained ? agent.algorithm_name ?? "Trained agent"
-    : move.controller === "agent" ? "No trained agent: System rule"
+  const trained = Boolean(variant) && !move.fallback;
+  const source = trained ? `${agent.algorithm_name ?? "Trained agent"}${variant === "counting" ? " + card counting" : ""}`
+    : variant ? "No trained agent: System rule"
     : move.controller === "random" ? "Random legal move" : "Rule-based System bot";
   const top = move.top ?? [];
   const bars = top.map((t) =>
@@ -543,7 +571,8 @@ function renderStats() {
   const extra = { blackjack: ["Net units", (s, i) => fmtSigned(s.totals[i])],
                   poker: ["Chips", (s, i) => fmtSigned(s.points[i], 0)],
                   hearts: [`Points (to ${session.match_target})`, (s, i) => s.points[i]],
-                  donkey: ["Times Donkey", (s, i) => +s.points[i].toFixed(2)] }[session.game];
+                  donkey: ["Times Donkey", (s, i) => +s.points[i].toFixed(2)],
+                  canasta: [`Match (to ${session.match_target})`, (s, i) => s.points[i]] }[session.game];
   el.replaceChildren(...session.boards.map((board, index) => {
     const s = board.stats;
     const title = boardTitle(session, index);
@@ -660,7 +689,14 @@ function wireControls() {
   $("#cancel-auto").addEventListener("click", () => { app.autoCancelled = true; schedule(); });
   $("#pause").addEventListener("click", () => setPaused(!app.paused));
   $("#step").addEventListener("click", () => { stopTimer(); tick(); });
-  const speedLabel = () => { $("#speed-label").textContent = SPEED_NAMES[speed()]; };
+  const speedLabel = () => {
+    const delay = SPEEDS[speed()];
+    const pace = delay ? `about ${(1000 / delay).toFixed(delay > 1000 ? 1 : 0)} moves per second` : "instant";
+    const slider = $("#speed");
+    $("#speed-label").textContent = slider.value;
+    slider.setAttribute("aria-valuetext", `${slider.value} of 10, ${pace}`);
+    slider.title = `Speed ${slider.value} of 10: ${pace}`;
+  };
   $("#speed").addEventListener("input", () => { speedLabel(); schedule(); });
   $("#auto-next").addEventListener("change", () => { app.autoCancelled = false; schedule(); });
   $("#help-open").addEventListener("click", openHelp);

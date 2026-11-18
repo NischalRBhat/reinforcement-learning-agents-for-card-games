@@ -50,6 +50,7 @@ class PokerGame(Game):
         self.showdown = False
         self.ev_net: list[float] | None = None
         self.log: list[str] = []
+        self.actions: list[tuple[int, int, str]] = []  # (street, player, text) for the UI
         self._post(self.button, SMALL_BLIND)
         self._post(1 - self.button, BIG_BLIND)
         self.to_act = self.button  # small blind acts first preflop
@@ -62,7 +63,7 @@ class PokerGame(Game):
         other.raises = [list(r) for r in self.raises]
         other.has_acted = [list(h) for h in self.has_acted]
         other.acted, other.can_raise = list(self.acted), list(self.can_raise)
-        other.log, other.history = [], []
+        other.log, other.history, other.actions = [], [], []
         other._legal = None
         return other
 
@@ -119,17 +120,16 @@ class PokerGame(Game):
 
     def _apply(self, action: int) -> None:
         player, opponent = self.to_act, 1 - self.to_act
-        name = ["P1", "P2"][player]
         if action == FOLD:
             self.folded = player
-            self.log.append(f"{name} folds")
+            self._say(player, "folds")
             self.is_terminal = True
             return
         self.has_acted[self.street][player] = True
         if action == CALL:
             call = min(self.to_call(player), self.stacks[player])
             self._post(player, call)
-            self.log.append(f"{name} {'calls ' + str(call) if call else 'checks'}")
+            self._say(player, f"calls {call}" if call else "checks")
             self.acted[player] = True
         else:
             target = self.raise_targets(player)[action]
@@ -143,7 +143,7 @@ class PokerGame(Game):
             self.raises[self.street][player] += 1
             self.acted = [False, False]
             self.acted[player] = True
-            self.log.append(f"{name} {'all-in' if self.stacks[player] == 0 else 'raises'} to {target}")
+            self._say(player, f"{'all-in' if self.stacks[player] == 0 else 'raises'} to {target}")
         if action == CALL:
             if self.street_bet[0] != self.street_bet[1]:  # called all-in for less
                 self._run_out()
@@ -152,6 +152,10 @@ class PokerGame(Game):
                 self._next_street()
                 return
         self.to_act = opponent
+
+    def _say(self, player: int, text: str) -> None:
+        self.log.append(f"{['P1', 'P2'][player]} {text}")
+        self.actions.append((self.street, player, text))
 
     def _next_street(self) -> None:
         if 0 in self.stacks:
@@ -247,6 +251,12 @@ class PokerGame(Game):
             return f"All-in ({target})" if target else "All-in"
         return f"Raise to {target} ({names[action]})" if target else f"Raise {names[action]}"
 
+    def _last_action(self, player: int) -> dict[str, Any] | None:
+        for street, p, text in reversed(self.actions):
+            if p == player:
+                return {"text": text, "street": STREETS[street], "current": street == self.street or self.done}
+        return None
+
     def view(self, viewer: int | None) -> dict[str, Any]:
         reveal = self.showdown and self.folded is None
         legal = self.legal_actions() if viewer is not None and viewer == self.current_player else []
@@ -267,5 +277,7 @@ class PokerGame(Game):
             "result": self.chip_result() if self.done else None,
             "folded": self.folded,
             "log": self.log[-12:],
+            # Each seat's latest action; "current" is False once a new street has begun.
+            "last_actions": [self._last_action(p) for p in range(2)],
             "legal_actions": [{"action": a, "label": self.action_label(a), "amount": targets.get(a)} for a in legal],
         }

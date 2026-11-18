@@ -15,15 +15,15 @@ import numpy as np
 from gymnasium import spaces
 from stable_baselines3.common.vec_env.base_vec_env import VecEnv
 
+from card_games_rl.encoders import get_encoder
 from card_games_rl.envs import worker
-from card_games_rl.games import game_class
 
 
 class LightVecEnv(VecEnv):
     def __init__(self, specs: list[dict[str, Any]]):
-        game = game_class(specs[0]["game_id"])
-        observation_space = spaces.Box(0.0, 1.0, shape=(game.obs_size,), dtype=np.float32)
-        super().__init__(len(specs), observation_space, spaces.Discrete(game.num_actions))
+        encoder = get_encoder(specs[0]["game_id"], specs[0].get("variant", "base"))
+        observation_space = spaces.Box(0.0, 1.0, shape=(encoder.size,), dtype=np.float32)
+        super().__init__(len(specs), observation_space, spaces.Discrete(encoder.num_actions))
         context = mp.get_context("spawn")
         self.remotes, self.processes = [], []
         for spec in specs:
@@ -33,7 +33,7 @@ class LightVecEnv(VecEnv):
             child.close()
             self.remotes.append(parent)
             self.processes.append(process)
-        self.masks = [np.ones(game.num_actions, dtype=bool)] * len(specs)
+        self.masks = [np.ones(encoder.num_actions, dtype=bool)] * len(specs)
         self.closed = False
 
     def reset(self):

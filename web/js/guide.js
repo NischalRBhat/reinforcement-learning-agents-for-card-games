@@ -9,6 +9,7 @@ export const GAME_META = {
   bluff: { icon: "?!", hue: 30, players: "4 players" },
   hearts: { icon: "♥", hue: 335, players: "4 players" },
   donkey: { icon: "D", hue: 50, players: "4 players" },
+  canasta: { icon: "★", hue: 280, players: "4 players, partners" },
 };
 
 export const GUIDES = {
@@ -57,6 +58,13 @@ export const GUIDES = {
   ],
 };
 
+GUIDES.canasta = [
+  "Two partnerships: you and North against West and East. Jokers and 2s are wild.",
+  "Each turn: draw from the stock or take the whole pile, meld, then discard one card.",
+  "Meld 3+ cards of a rank (at least 2 natural, at most 3 wild). Seven make a canasta.",
+  "Go out once your side has a canasta. First side to 5,000 wins the match.",
+];
+
 export const SHORTCUTS = [
   ["Space", "Pause or resume computer moves"],
   ["S", "Step one computer move"],
@@ -100,10 +108,15 @@ export const RULES = {
       "Duel vs Agent: you and the agent play the very same shoe side by side, so results compare luck-free.",
       "The scoreboard tracks net units over the session. Perfect play still loses about 0.5% per hand: the house edge.",
     ] },
-    { title: "Tips", items: [
-      "Stand on hard 17 or more; hit hard 11 or less.",
-      "Always split Aces and 8s; never split 10s or 5s.",
-      "Insurance loses money in the long run.",
+    { title: "Tips", table: [
+      ["Hard 17 or more", "Stand. Another card busts you more often than it helps."],
+      ["Hard 12–16", "Stand when the dealer shows 2–6 (but hit 12 against 2 or 3); hit against 7 or higher. A dealer showing 4–6 busts most often."],
+      ["Hard 9–11", "Double 11 against 2–10, 10 against 2–9 and 9 against 3–6. Otherwise hit."],
+      ["Soft hands", "Never stand on soft 17 or less. Stand on soft 19+. Soft 18: double against 3–6, stand against 2, 7 or 8, hit against 9, 10 or an Ace."],
+      ["Pairs", "Always split Aces and 8s; never split 10s or 5s (play 5-5 as a hard 10). Split 2s, 3s, 6s, 7s and 9s mainly against weak dealer cards."],
+      ["Surrender", "Give up hard 16 against 9, 10 or an Ace, and hard 15 against a 10. Losing half beats losing more often than not."],
+      ["Insurance", "Skip it: it loses money in the long run."],
+      ["Learn from the agent", "In a Duel you both see the same cards. Where your choices differ, the agent is usually closer to the best play."],
     ] },
   ],
   klondike: [
@@ -136,10 +149,14 @@ export const RULES = {
       "Undo takes back your last move when you play alone.",
       "“All legal moves” lists every move as a button if you prefer.",
     ] },
-    { title: "Tips", items: [
-      "Turning over face-down cards matters most; prefer moves that expose them.",
-      "Don't empty a column unless you have a King ready for it.",
-      "Avoid rushing low cards home if they're still needed to hold a column.",
+    { title: "Tips", table: [
+      ["Reveal first", "Turning over face-down cards matters most. Prefer moves that expose one, starting with the tallest columns: they hide the most cards."],
+      ["Purposeful moves", "Moving a run between columns only helps if it uncovers a card or frees a space."],
+      ["Empty columns", "Don't empty a column unless a King (or a run headed by one) is ready to move in."],
+      ["Which King", "When several Kings could fill a space, pick the colour that fits the cards waiting: a red Queen needs a black King."],
+      ["Foundations", "Aces and 2s can go home at once. Hold back higher cards while lower cards of the other colour still need them on the columns."],
+      ["The stock", "Drawing one at a time with unlimited recycles shows you every card each pass. Look through the stock before committing to a plan."],
+      ["After a loss", "Ask the solver whether the deal was winnable. Some deals can't be won at all."],
     ] },
   ],
   poker: [
@@ -172,9 +189,15 @@ export const RULES = {
       "The scoreboard keeps your running chip total across hands.",
       "The agent plays a mixed strategy (it randomises), so it can bluff and slow-play.",
     ] },
-    { title: "Tips", items: [
-      "Play more hands on the button: you act last after the flop.",
-      "Compare the price of a call with the pot: a 10-chip call into a 30-chip pot needs about a 25% chance to win.",
+    { title: "Tips", table: [
+      ["Position", "Play more hands on the button: you act last after the flop and see your opponent's choice first."],
+      ["Starting hands", "Heads-up, most hands are worth playing. Raise pairs, any Ace, most Kings and suited or connected cards; fold the weakest (7-2, 8-3 offsuit) to a raise."],
+      ["Pot odds", "Compare the price of a call with the pot: a 10-chip call into a 30-chip pot needs about a 25% chance to win."],
+      ["Counting outs", "Outs are the cards that would make your hand. Multiply them by 4 on the flop or by 2 on the turn for a rough chance to hit: a flush draw (9 outs) is about 35% with two cards to come."],
+      ["Value and bluffs", "Bet when worse hands will call, or when better hands will fold. A bet that does neither only risks chips."],
+      ["Deep stacks", "With 100 big blinds behind, a single pair rarely wins a big all-in pot. Slow down when the opponent keeps raising."],
+      ["Folding is normal", "Many hands end preflop when one player folds the blinds. It's a cheap way to lose a weak hand."],
+      ["Against the agent", "The agent mixes its play, so a bet doesn't always mean strength. Don't fold every time, and don't call every time either."],
     ] },
   ],
   rummy: [
@@ -198,10 +221,14 @@ export const RULES = {
       "Your current deadwood shows next to your name.",
       "Cards your opponent took from the discard pile are known to you; the agent tracks them too.",
     ] },
-    { title: "Tips", items: [
-      "Taking the discard tells your opponent what you collect; draw from the stock when the discard doesn't help.",
-      "Throw high unmatched cards early: they cost the most deadwood.",
-      "Avoid discarding cards that fit what the opponent picked up.",
+    { title: "Tips", table: [
+      ["Shed high cards", "Throw high unmatched cards (J, Q, K) early: they cost the most deadwood if the opponent goes out."],
+      ["Stay flexible", "Keep cards that can join two possible melds. A 7♥ next to 6♥ and 7♣ can become a run or a set."],
+      ["Hide your plans", "Taking the discard shows what you collect. Draw from the stock unless the discard completes or nearly completes a meld."],
+      ["Read the opponent", "Remember what they picked up and what they passed on. Don't discard cards that fit their pickups."],
+      ["Dead cards", "Once two cards of a rank are in the discard pile, a pair of that rank can never become a set. Break it up."],
+      ["Safe discards", "A rank the opponent just threw away is usually safe to discard."],
+      ["Low stock", "When the stock runs low, cut your deadwood: if it runs out again, the lower deadwood wins."],
     ] },
   ],
   bluff: [
@@ -232,9 +259,15 @@ export const RULES = {
       "“Quick plays” offers ready-made choices of true and bluff cards.",
       "You never see whether the computer bluffed unless someone calls.",
     ] },
-    { title: "Tips", items: [
-      "Count: if the claims this round plus the cards of that rank in your own hand exceed 4, someone is lying.",
-      "Bluffing gets riskier the bigger the pile and the fewer cards you hold.",
+    { title: "Tips", table: [
+      ["Count the rank", "If the cards claimed this round plus the cards of that rank in your hand add up to more than 4, someone is lying."],
+      ["Start strong", "When you start a round, name a rank you hold several of. Three or four true cards leave your hand at no risk."],
+      ["Truth is free", "Play true cards whenever you can, and save bluffs for when you have none."],
+      ["Mixed plays are lies", "A play with one off-rank card among true ones still counts as a lie if it is called."],
+      ["When to call", "Call when a claim is impossible, or when the claimant is down to their last cards. A wrong call hands you the pile."],
+      ["Passing", "Passing costs nothing. With a big pile and none of the rank, passing is often safer than bluffing."],
+      ["Risk grows", "Bluffing gets riskier the bigger the pile and the fewer cards you hold."],
+      ["Your last card", "The next player may call your last play, so make it a true one if you can."],
     ] },
   ],
   hearts: [
@@ -258,10 +291,66 @@ export const RULES = {
       "Click three cards to pass, then click a legal card to play. Illegal cards are dimmed.",
       "Each seat shows its points this hand and its match total.",
     ] },
-    { title: "Tips", items: [
-      "Pass high spades (A♠, K♠) unless you hold enough spades to protect them.",
-      "Empty a suit early so you can dump the Q♠ and hearts on others.",
-      "Watch for someone collecting every heart; take one to stop a moon shot.",
+    { title: "Tips", table: [
+      ["Passing", "Pass A♠ and K♠ unless you hold four or more spades to protect them, along with high hearts. Passing all of a short suit makes you void in it."],
+      ["Get void", "Empty a suit early. When that suit is led, you can dump the Q♠ or hearts on someone else."],
+      ["Duck", "When you follow suit, play the highest card that still loses to the card winning the trick. That gets rid of a dangerous card safely."],
+      ["Lead low", "Lead low cards in suits where others still hold higher ones, so someone else takes the trick."],
+      ["Smoke out the queen", "Without the Q♠ and with only low spades, lead spades to force it out of whoever holds it."],
+      ["Keep count", "Track which hearts and spades are gone, and who has shown a void (they failed to follow suit)."],
+      ["Stop a moon shot", "If one player is taking every point, take a single heart yourself to break the moon."],
+      ["Late in the match", "Near 100, avoiding points matters most. Steer points towards the leader when you can."],
+    ] },
+  ],
+  canasta: [
+    { title: "Goal", text: "Score more than the other partnership. Points come from the cards you meld, canastas (melds of seven), red threes and going out; cards left in hand count against you. The first side to 5,000 wins the match." },
+    { title: "Setup", items: [
+      "Four players in two partnerships: partners sit opposite (you and North against West and East).",
+      "Two decks plus 4 jokers: 108 cards. Each player gets 11.",
+      "Jokers and 2s are wild. Red threes are bonus cards: they are laid out at once and replaced.",
+    ] },
+    { title: "A turn", items: [
+      "Draw the top card of the stock, or take the whole discard pile (see below).",
+      "Meld as much as you like: new melds, or cards added to your side's melds.",
+      "Discard one card. That ends your turn.",
+    ] },
+    { title: "Melds and canastas", items: [
+      "A meld is 3 or more cards of one rank, 4 to Ace, with at least 2 natural cards and at most 3 wild cards.",
+      "Your side has one meld per rank; either partner can add to it.",
+      "Seven or more cards make a canasta: natural (no wild cards) +500, mixed +300.",
+      "Black threes can only be melded when you go out.",
+    ] },
+    { title: "Your opening meld", items: [
+      "Your side's first melds in a hand must be worth a minimum, set by your match score: 15 below zero, 50 up to 1,495, 90 up to 2,995, 120 from 3,000.",
+      "Card values: joker 50; 2 and Ace 20; King to 8 10; 7 to 4 and black 3 5.",
+    ] },
+    { title: "Taking the pile", items: [
+      "You must meld the pile's top card at once with cards from your hand; then the whole pile is yours.",
+      "Frozen pile (a wild card or red three is in it, or your side hasn't melded yet): you need a natural pair matching the top card.",
+      "Unfrozen pile: a natural pair, or one natural and one wild card, or add the top card to your side's meld of that rank.",
+      "A black three on top blocks the next player, and a wild card on top can't be taken.",
+      "Before your side has melded, the top card plus cards from your hand must reach the opening minimum before the rest of the pile is picked up.",
+    ] },
+    { title: "Going out and scoring", items: [
+      "You may go out only when your side has a canasta: meld every card, or all but one and discard it. +100, or +200 concealed (your whole hand melded in one turn, with nothing melded before).",
+      "The hand also ends if the stock runs out and the next player can't take the pile.",
+      "Each side scores its melded cards, canasta bonuses, red threes (+100 each, +800 for all four; negative if the side never melded) and going out, minus the cards left in its hands.",
+    ] },
+    { title: "At this table", items: [
+      "Click a card in your hand: the melds, adds and discard it allows appear below it.",
+      "“All legal moves” lists every move as a button.",
+      "Each side's melds are shown in a strip; canastas are marked natural or mixed.",
+      "The pile shows when it is frozen or blocked.",
+    ] },
+    { title: "Tips", table: [
+      ["Canastas first", "Build towards canastas: going out needs one, and they are worth the most."],
+      ["Meld early", "Until your side has melded, the pile is frozen for you and red threes count against you. Reach the opening minimum soon."],
+      ["Keep pairs", "Natural pairs are what let you take a frozen pile. Hold them while the pile is growing."],
+      ["Spend wilds wisely", "Use jokers and 2s to finish a canasta, reach the opening minimum or go out, not to start small melds."],
+      ["Safe discards", "Don't discard a rank the opponents have melded: it lets them take an unfrozen pile by adding to it."],
+      ["Freeze the pile", "If the opponents are close to taking a big pile, discard a wild card to freeze it."],
+      ["Black threes", "Keep one to discard when the pile is valuable: it blocks the next player for a turn."],
+      ["Team play", "Your partner's melds are yours too, so add to them. Before going out, check your partner's hand size: the cards they hold count against your side."],
     ] },
   ],
   donkey: [
@@ -287,9 +376,14 @@ export const RULES = {
       "A finished trick stays on the table until the next lead. A cut card has a red ring; the card that picks up has a gold ring.",
       "Seats show the suits a player is known to be out of, and cards everyone saw them pick up.",
     ] },
-    { title: "Tips", items: [
-      "Get out of a suit early: being void lets you cut.",
-      "Play high cards when you expect everyone to follow (the trick is cleared), and keep low ones when a cut is likely.",
+    { title: "Tips", table: [
+      ["Get void", "Get out of a suit early. Being void lets you cut, and cutting costs you nothing."],
+      ["High when safe", "Play high cards when you expect everyone to follow: the trick is cleared and those cards are gone."],
+      ["Low when a cut is coming", "The highest card of the led suit picks up a cut trick. When someone is likely void, play low under another player's high card."],
+      ["Careful leads", "Don't lead a high card in a suit someone has run out of: they cut, and you pick up the whole trick."],
+      ["Count suits", "Each suit has 13 cards. When most of a suit has been cleared, someone is likely void and a cut is close."],
+      ["Use the seat badges", "Seats show known voids and cards a player was seen picking up. Lead suits they can still follow."],
+      ["After a pickup", "You lead next. Lead a suit that everyone still holds so the trick clears and you can shed cards."],
     ] },
   ],
 };

@@ -461,3 +461,105 @@ Every card shed, whether discarded or passed to someone who picks up, is rewarde
   - zero-sum returns where specified;
   - `observation(p)` and `view(p)` never encode hidden information. This is tested by altering hidden cards and asserting the observation is unchanged.
 - **Gymnasium checks:** `check_env` passes; observations stay within their bounds; the sum of S-deltas equals the final return.
+
+---
+
+## 9. Card-counting agents (a second agent per game)
+
+**Goal:** test whether exact card counting makes the agents stronger, without changing the current agents. Each counting agent is trained next to the current one and the two are compared on the same deals.
+
+### Observation encoders (`card_games_rl/encoders.py`)
+
+| Encoder | Contents | Version |
+|---|---|---|
+| `base` | the engine's `observation(p)`, exactly as before | `OBS_VERSION` |
+| `counting` | `base` followed by `games/<g>/counting.features(game, p)` | (`OBS_VERSION`, `COUNTING_VERSION`) |
+
+- **Base observations are frozen:** a test fingerprints the base observations on fixed deals, and they may not change without an `OBS_VERSION` bump.
+- **No hidden information:** counting features use public information only. A test re-deals every card the player cannot locate among the other hands and asserts the features are unchanged.
+- **Unseen cards:** cards the player cannot locate are treated as dealt at random into the opponents' unknown hand slots, respecting known voids. `core/counting.py` gives the closed forms (no match / at least *k* matches).
+
+### Features
+
+| Game | Size | Features |
+|---|---|---|
+| Donkey | +78 | **Per suit:** own, unseen and discarded counts; *lead safety* (every remaining opponent still holds the suit); expected opponents out of it; how low the player's lowest card sits among the unseen. **Per legal card:** the chance of ending up picking up the trick. It walks the players still to play: each may cut (the current highest card picks up) or follow and overtake (with probability ½ when it holds a higher card). **Scalars:** unseen cards; own cards the others know |
+| Hearts | +88 | **Per suit:** own, unseen and played counts; chance a lead is cut; room to duck under the player's lowest card; risk above its highest. **Q♠:** where it is (hand, played, passed by the player, unseen) and each opponent's chance of holding it. **Points:** hearts unseen; points still out; leading opponent's points; moon-shot warning; points in the trick. **Per legal card:** the chance of winning the trick |
+| Bluff | +20 | **Per rank:** unlocated copies (not in the player's hand, pile contributions or discards, nor seen going to someone after a call). The chance the last claim is true; claim inflation; *exposure* (the chance the next player holds enough copies to know a claim of 1–4 cards is a lie); unlocated total |
+| Rummy | — | The counting agent is the look-ahead search plus an opponent model read from the public history. Discards that fit cards the opponent threw away or declined are safer. Unseen cards that fit the opponent's pick-ups are weighted down in the next-draw odds (they are probably in its hand); those that fit what it let go are weighted up |
+
+### Training, storage and comparison
+
+- **Training:** `train --variant counting` uses the same config, recipe, warm start and budget. The env, workers, self-play pool, policies and pretraining all receive the encoder. A `variants: {counting: {...}}` section in a game's YAML can override settings; Rummy uses it to name its counting search.
+- **Storage:** models go to `models/<game>-counting/` with their own `meta.json` (`variant`, `obs_version`, `counting_version`), self-play pool and checkpoints. The registry refuses a counting model whose versions don't match.
+- **Evaluation:** `evaluate --variant counting` reports against the same baselines and gate. It also runs a **head-to-head** against the base agent on duplicate deals: in 2-player games each deal is played with the agents in both seats; in 4-player games the counting agent takes two opposite seats and the base agent the others, then they swap. The report gives both agents' metric, the difference and its 95% CI.
+- **App:** seats can be a *Counting agent*, and competitive games with a counting agent get an **Agent vs Counting agent** mode.
+
+
+---
+
+## 10. Canasta (4 players, two partnerships)
+
+### Rules (variant)
+Classic Hoyle partnership Canasta, as in docs/GAMES.md §8. Choices the rules leave open:
+- **No permission to go out:** going out doesn't need the partner's permission.
+- **Hand ends:** when the stock runs out, the hand ends as soon as the player to draw can't take the pile. If they can, the take is forced.
+- **Pickup visibility:** pile pickups are public, so every player knows the kinds the taker picked up until they are melded or discarded.
+- **Cap:** a hand stops at 800 actions, or in a rare dead end (for example one card left, no canasta and an empty stock), and is scored as if the stock had run out.
+
+### Cards and kinds
+Ids 0..107: `deck * 52 + card` for the two decks, 104..107 jokers. Melding and discarding use 15 kinds: joker, 2, red 3, black 3, then ranks 4..A.
+
+### Actions (499)
+| Range | Action |
+|---|---|
+| 0 | draw from the stock |
+| 1–3 | take the pile: natural pair / natural + wild / add the top card to the side's meld |
+| 4–483 | meld: target (ranks 4..A, black 3) × naturals added (0–3) × wild cards added (jokers j, twos d, j + d ≤ 3) |
+| 484–498 | discard one card of a kind |
+
+Masks enforce every rule: meld shape, wild limits, black threes only when going out, no emptying the hand without a canasta, and the opening minimum. An opening meld may be laid in several steps, but each step must keep the minimum reachable from the hand (a greedy upper bound), and discarding is blocked until it is reached.
+
+### Agent actions: planner (21, `games/canasta/plan.py`, `PLAN_VERSION = 1`)
+With the engine's actions a player makes about 150 decisions per hand, and the first agent (PPO on engine actions) lost 121 ± 42 points per hand to a System partnership: even its imitation of the System bot played far worse than the bot. The agent therefore chooses *planner actions*, and the System bot's meld rules fill in the details:
+
+| Plan action | Engine action |
+|---|---|
+| 0–3 | draw / take the pile, unchanged |
+| 4 `MELD` | the System bot's meld now (naturals; wild cards only to open, complete a canasta or go out) |
+| 5 `MELD_WILD` | the meld with wild cards that grows a meld furthest (a canasta first, then size, 2s before jokers) |
+| 6–20 | discard one card of a kind, unchanged |
+
+- Choosing a discard while melds are possible is how the agent holds cards back.
+- Every engine move stays reachable: any natural meld is a positive System meld and any meld with wild cards is a `MELD_WILD` candidate.
+- The System bot's own moves translate exactly, so the warm start copies it perfectly (imitation accuracy 1.000, and the copy scores 0 against a System partnership).
+- About 23 decisions per hand for the learner.
+- The encoder (`card_games_rl/encoders.py`) owns the translation: policies return engine actions, so opponents, the API and evaluation are unchanged.
+- **Planner features** (48, appended to the observation): the System bot's choice now (one-hot over the 21 plan actions); for `MELD` and `MELD_WILD`: available, cards added, wild cards used, new meld, makes a canasta, goes out; the System bot's discard choice (one-hot over 15 kinds).
+
+### Observation (239 floats, `OBS_VERSION = 1`)
+- Hand: count per kind.
+- Melds of both sides per target: naturals, wilds, canasta, natural canasta.
+- Red threes per side.
+- Pile: size, top kind, frozen, blocked, and count per kind (every discard is seen).
+- Hand sizes; stock size.
+- Per side: melded or not, opening minimums, canasta counts, match scores.
+- Turn: phase, value melded so far towards the opening, pile cards waiting for the opening.
+- **Card counting:**
+  - unseen copies per kind;
+  - kinds each other player is known to hold from pickups;
+  - per kind, the chance the next opponent could take the pile if that kind were discarded now.
+
+### Rewards
+| Component | Value |
+|---|---|
+| S: end of hand | (own side's hand score − other side's) / 2000 for both partners (zero-sum) |
+| Φ: public progress | 0.5 · (progress(own side) − progress(other side)) / 2000, where progress counts melded card values, canasta bonuses, and red threes once the side has melded (λ = 1) |
+
+Earlier versions also credited 30 points per card in melds still short of a canasta. That was removed: it pushed the agent to lay cards down early, which shows the opponents your ranks and spends the pairs needed to take the pile.
+
+### Agent and evaluation
+- **Training:** MaskablePPO over planner actions, warm-started as an exact copy of the System bot (policy and value head). Half of the partners and opponents are System bots (the evaluation opponent), the rest past versions; no random players. Small, careful PPO steps (learning rate 1e-4, clip 0.1, 4 epochs, entropy 0.003) refine the copied play instead of overwriting it. Network 256×256. Budget: 6 hours.
+- **Evaluation:** the agent plays both seats of a side (`team_seats`) against a System partnership on duplicate deals.
+- **Metric:** points per hand above the other side.
+- **Gate:** ≥ +150 points per hand.

@@ -28,7 +28,8 @@ def teacher_for(game_id: str, seed: int = 0) -> Policy:
 def collect(game_id: str, config: dict[str, Any], episodes: int, seed: int = 0) -> dict[str, np.ndarray]:
     """Teacher trajectories from the learner's point of view (same rewards as training)."""
     opponents = heuristic_opponents(game_id, seed) if GAME_SPECS[game_id].max_players > 1 else None
-    env = SingleAgentEnv(game_id, opponents=opponents, seed=seed, game_kwargs=config.get("game_kwargs") or {})
+    env = SingleAgentEnv(game_id, opponents=opponents, seed=seed, game_kwargs=config.get("game_kwargs") or {},
+                         variant=config.get("variant", "base"))
     teacher = teacher_for(game_id, seed)
     gamma = config["ppo"]["gamma"]
     observations, masks, actions, returns = [], [], [], []
@@ -36,7 +37,8 @@ def collect(game_id: str, config: dict[str, Any], episodes: int, seed: int = 0) 
         obs, _ = env.reset(seed=seed * 100_000 + episode)
         rewards, done = [], False
         while not done:
-            action = teacher.act(env.game, env.seat)
+            # The teacher plays engine actions; the learner may choose from planner actions.
+            action = env.encoder.from_game(env.game, teacher.act(env.game, env.seat))
             observations.append(obs)
             masks.append(env.action_masks())
             actions.append(action)

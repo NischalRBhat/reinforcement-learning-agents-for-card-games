@@ -1,0 +1,29 @@
+{
+  "game": "canasta",
+  "variant": "base",
+  "obs_version": 1,
+  "updated_at": "2026-11-07T12:05:49",
+  "algorithm": "MaskablePPO",
+  "profile": "full",
+  "timesteps": 1000000,
+  "seed": 0,
+  "deterministic": true,
+  "net_arch": [
+    512,
+    512
+  ],
+  "validation": {
+    "metric": "point_diff",
+    "value": -39.4875,
+    "ci95": 65.0441738003922,
+    "mean_return": -0.01974375,
+    "episodes": 800,
+    "deals": 200,
+    "higher_is_better": true
+  },
+  "reference": null,
+  "gate": {
+    "threshold": 150,
+    "passed": false
+  }
+}

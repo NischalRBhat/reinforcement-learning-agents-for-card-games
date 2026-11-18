@@ -1,0 +1,28 @@
+# Four-player partnership Canasta (docs/ENV_DESIGN.md §10). The agent chooses planner
+# actions (games/canasta/plan.py): draw or take the pile, meld the System way or with wild
+# cards, or hold back and discard. It starts as a copy of the System bot and learns from
+# there: half its opponents and partners are System bots (the evaluation opponent), and
+# PPO steps are small so the copied play is refined rather than overwritten.
+game: canasta
+opponents: pool
+opponent_mix: {recent: 0.3, old: 0.2, heuristic: 0.5, random: 0.0}
+game_kwargs: {}
+policy:
+  net_arch: [256, 256]
+ppo:
+  learning_rate: 1.0e-4
+  n_steps: 1024
+  batch_size: 512
+  n_epochs: 4
+  gamma: 0.999
+  gae_lambda: 0.95
+  clip_range: 0.1
+  ent_coef: 0.003
+evaluation:
+  deterministic: true
+  metric: point_diff
+  opponent: heuristic
+  gate: {threshold: 150}   # points per hand better than a System partnership (System vs System = 0)
+profiles:
+  smoke: {timesteps: 20000, pretrain_episodes: 30, n_envs: 2, eval_every: 10000, eval_episodes: 40, snapshot_every: 5000}
+  full: {timesteps: 40000000, pretrain_episodes: 3000, n_envs: 4, eval_every: 500000, eval_episodes: 800, test_episodes: 2000, snapshot_every: 250000}

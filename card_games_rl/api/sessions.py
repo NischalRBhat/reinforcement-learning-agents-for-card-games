@@ -1,8 +1,8 @@
 """Seat-based play sessions shared by every play mode.
 
 A session holds one or two *boards*. A board is one game plus a controller per
-seat: ``human``, ``system`` (the heuristic bot), ``agent`` (the trained model) or
-``random``. Two boards with the same deal make a *duel*, used for the solo and
+seat: ``human``, ``system`` (the heuristic bot), ``agent`` (the trained model),
+``counting`` (the card-counting agent, where the game has one) or ``random``. Two boards with the same deal make a *duel*, used for the solo and
 dealer games (Blackjack, Klondike) where "human vs agent" means playing the same
 cards side by side. All rules live in the engines; this module only routes moves.
 """
@@ -21,16 +21,20 @@ from typing import Any, Callable
 from card_games_rl.agents.registry import best_model_path, load_agent, meta_path, model_dir, read_meta
 from card_games_rl.core import Game, IllegalAction, Policy
 from card_games_rl.core.seeds import VALIDATION_SEEDS
+from card_games_rl.encoders import BASE, COUNTING, agent_key, variants_for
 from card_games_rl.games import get_spec, heuristic_policy, make_game, random_policy
 
-CONTROLLERS = ("human", "system", "agent", "random")
-MODES = ("human_vs_system", "human_vs_agent", "agent_vs_agent")
+CONTROLLERS = ("human", "system", "agent", "counting", "random")
+MODES = ("human_vs_system", "human_vs_agent", "agent_vs_agent", "agent_vs_counting")
+AGENT_VARIANTS = {"agent": BASE, "counting": COUNTING}   # seat controller -> trained agent kind
 ALGORITHM_NAMES = {"MaskablePPO": "Reinforcement learning (PPO)", "cfr": "Counterfactual regret minimisation",
                    "search": "Look-ahead search"}
 # The reference result shown next to the agent's: what it should be compared with.
 BASELINE_REFERENCE = {"blackjack": "optimal", "klondike": "heuristic"}
 BASELINE_LABELS = {"optimal": "Optimal strategy", "heuristic": "System bot", "heuristic_vs_heuristic": "System vs System"}
 HEARTS_MATCH_POINTS = 100
+CANASTA_MATCH_POINTS = 5000
+MATCH_TARGETS = {"hearts": HEARTS_MATCH_POINTS, "canasta": CANASTA_MATCH_POINTS}
 MAX_ADVANCE = 2000
 SESSION_TTL = 3600.0
 MAX_SESSIONS = 200
@@ -49,40 +53,44 @@ class SessionError(Exception):
 # Trained agents
 # ---------------------------------------------------------------------------
 class AgentCache:
-    """Loads each game's trained model once and shares it across sessions."""
+    """Loads each trained agent (per game and variant) once and shares it across sessions."""
 
     def __init__(self, root: Path | None = None, loader: Callable[..., Policy | None] = load_agent):
         self.root = root
         self.loader = loader
-        self._agents: dict[str, Policy | None] = {}
+        self._agents: dict[tuple[str, str], Policy | None] = {}
         self._reports: dict[str, tuple[float, dict[str, Any]]] = {}
         self._lock = threading.Lock()
 
-    def get(self, game_id: str) -> Policy | None:
+    def get(self, game_id: str, variant: str = BASE) -> Policy | None:
+        if variant not in variants_for(game_id):
+            return None
         with self._lock:
-            if game_id not in self._agents:
-                self._agents[game_id] = self.loader(game_id, root=self.root)
-            return self._agents[game_id]
+            if (game_id, variant) not in self._agents:
+                kwargs = {} if variant == BASE else {"variant": variant}
+                self._agents[(game_id, variant)] = self.loader(game_id, root=self.root, **kwargs)
+            return self._agents[(game_id, variant)]
 
-    def _report(self, game_id: str) -> dict[str, Any] | None:
+    def _report(self, game_id: str, variant: str = BASE) -> dict[str, Any] | None:
         """The held-out test report from ``evaluate``, if it was written after the current model."""
-        path = model_dir(game_id, self.root) / "eval_report.json"
-        meta = meta_path(game_id, self.root)
+        path = model_dir(game_id, self.root, variant) / "eval_report.json"
+        meta = meta_path(game_id, self.root, variant)
         if not path.exists() or not meta.exists() or path.stat().st_mtime < meta.stat().st_mtime:
             return None
         stamp = path.stat().st_mtime
-        cached = self._reports.get(game_id)
+        key = agent_key(game_id, variant)
+        cached = self._reports.get(key)
         if cached is None or cached[0] != stamp:
             try:
-                cached = self._reports[game_id] = (stamp, json.loads(path.read_text(encoding="utf-8")))
+                cached = self._reports[key] = (stamp, json.loads(path.read_text(encoding="utf-8")))
             except (OSError, ValueError):
                 return None
         return cached[1]
 
-    def status(self, game_id: str) -> dict[str, Any]:
+    def status(self, game_id: str, variant: str = BASE) -> dict[str, Any]:
         """What the UI shows about a game's agent: method, headline result, target and a baseline."""
-        meta = read_meta(game_id, self.root) or {}
-        report = self._report(game_id)
+        meta = read_meta(game_id, self.root, variant) or {}
+        report = self._report(game_id, variant)
         result = (report or {}).get("primary") or meta.get("validation") or {}
         gate = (report or {}).get("gate") or meta.get("gate") or {}
         algorithm = meta.get("algorithm", "MaskablePPO") if meta else None
@@ -94,8 +102,10 @@ class AgentCache:
                 baseline = {"label": BASELINE_LABELS[name], "value": reference["value"]}
         elif isinstance(meta.get("reference"), dict) and "value" in meta["reference"]:
             baseline = {"label": BASELINE_LABELS["optimal"], "value": meta["reference"]["value"]}
+        duel = (report or {}).get("head_to_head")
         return {
-            "trained": best_model_path(game_id, self.root) is not None,
+            "variant": variant,
+            "trained": best_model_path(game_id, self.root, variant) is not None,
             "algorithm": algorithm,
             "algorithm_name": ALGORITHM_NAMES.get(algorithm, algorithm),
             "timesteps": meta.get("timesteps"),
@@ -110,7 +120,13 @@ class AgentCache:
             "max_gap": gate.get("max_gap"),
             "gate_passed": gate.get("passed"),
             "baseline": baseline,
+            # Counting agents: the duplicate-deal duel against the base agent.
+            "head_to_head": {k: duel[k] for k in ("metric", "a", "b", "difference", "ci95", "a_better", "deals")}
+            if duel else None,
         }
+
+    def statuses(self, game_id: str) -> dict[str, dict[str, Any]]:
+        return {variant: self.status(game_id, variant) for variant in variants_for(game_id)}
 
 
 # ---------------------------------------------------------------------------
@@ -126,6 +142,10 @@ def default_seats(game_id: str, mode: str) -> list[list[str]]:
         return [["human"] + ["system"] * (n - 1)]
     if mode == "agent_vs_agent":
         return [["agent"] * n]
+    if mode == "agent_vs_counting":
+        if COUNTING not in variants_for(game_id) or spec.category != "competitive":
+            raise SessionError(f"{spec.name} has no card-counting agent", 422)
+        return [["agent" if seat % 2 == 0 else "counting" for seat in range(n)]]
     if spec.category in ("solo", "dealer"):  # duel: same deal, side by side
         return [["human"], ["agent"]]
     return [["human"] + ["agent"] * (n - 1)]
@@ -167,6 +187,7 @@ class Session:
         self.base_seed = seed if seed is not None else random.randrange(VALIDATION_SEEDS)
         self.round = 0
         self.match_over = False
+        self.team_scores = [0, 0]   # Canasta match score per partnership (sets the opening minimum)
         self.lock = threading.Lock()
         self.touched = time.monotonic()
         board_seats = seats or default_seats(game_id, mode)
@@ -192,6 +213,8 @@ class Session:
                 raise SessionError(f"Unknown controller(s) {bad}; choose from {list(CONTROLLERS)}", 422)
             if seats.count("human") > 1:
                 raise SessionError("At most one human seat per board", 422)
+            if "counting" in seats and COUNTING not in variants_for(self.game_id):
+                raise SessionError(f"{self.spec.name} has no card-counting agent", 422)
 
     def _game_kwargs(self) -> dict[str, Any]:
         # Match play: Hearts rotates the pass direction, Poker alternates the button.
@@ -199,6 +222,8 @@ class Session:
             return {"pass_direction": self.round % 4}
         if self.game_id == "poker":
             return {"button": (self.base_seed + self.round) % 2}
+        if self.game_id == "canasta":  # the deal passes clockwise; minimums follow the match score
+            return {"team_scores": list(self.team_scores), "dealer": (self.base_seed + self.round) % 4}
         return {}
 
     def _new_game(self) -> Game:
@@ -211,11 +236,11 @@ class Session:
             return None, False
         if controller == "random":
             return random_policy(self.game_id, seed), False
-        if controller == "agent":
-            agent = self.agents.get(self.game_id)
+        if controller in AGENT_VARIANTS:
+            agent = self.agents.get(self.game_id, AGENT_VARIANTS[controller])
             if agent is not None:
                 return agent, False
-        return heuristic_policy(self.game_id, seed), controller == "agent"
+        return heuristic_policy(self.game_id, seed), controller in AGENT_VARIANTS
 
     def _make_board(self, seats: list[str]) -> Board:
         policies, fallback = zip(*(self._policy(c, i) for i, c in enumerate(seats)))
@@ -293,11 +318,19 @@ class Session:
         played = []
         for index in indices:
             board = self.board(index)
+            if self._waiting(board):
+                continue
             while len(played) < min(steps, MAX_ADVANCE) and not board.game.done and not board.human_turn:
                 played.append({"board": index, **self._bot_move(board)})
             if played:
                 break
         return played
+
+    def _waiting(self, board: Board) -> bool:
+        """In a duel the agent's board holds still until the human's deal is over: both play
+        the same shoe or deal, so its moves would show the human cards still to come."""
+        return board.human_seat is None and any(
+            b is not board and b.human_seat is not None and not b.game.done for b in self.boards)
 
     def _bot_move(self, board: Board) -> dict[str, Any]:
         game = board.game
@@ -315,7 +348,7 @@ class Session:
                     "prob": round(p, 4)} for a, p in best]
         label = game.action_label(action) if self.reveal else game.public_label(action)
         # A trained agent without probabilities met a situation outside its strategy (CFR) and used the System rule.
-        rule_move = board.seats[seat] == "agent" and not board.agent_fallback[seat] and probs is None
+        rule_move = board.seats[seat] in AGENT_VARIANTS and not board.agent_fallback[seat] and probs is None
         move = {"seat": seat, "controller": board.seats[seat], "fallback": board.agent_fallback[seat],
                 "rule_move": rule_move, "action": action, "label": label, "top": top}
         game.step(action)
@@ -340,7 +373,12 @@ class Session:
         else:
             for seat in game.winners():
                 board.wins[seat] += 1
-        if final.get("hand_points"):  # Hearts: match to 100
+        if self.game_id == "canasta" and final.get("hand_scores"):  # Canasta: partnerships to 5,000
+            for seat in range(len(board.seats)):
+                board.points[seat] += final["hand_scores"][seat % 2]
+            self.team_scores = [int(board.points[0]), int(board.points[1])]
+            self.match_over = max(self.team_scores) >= CANASTA_MATCH_POINTS
+        elif final.get("hand_points"):  # Hearts: match to 100
             for seat, pts in enumerate(final["hand_points"]):
                 board.points[seat] += pts
             self.match_over = max(board.points) >= HEARTS_MATCH_POINTS
@@ -359,6 +397,7 @@ class Session:
             for board in self.boards:
                 board.points = [0.0] * len(board.seats)
             self.match_over = False
+            self.team_scores = [0, 0]
         for board in self.boards:
             board.game = self._new_game()
             board.moves = []
@@ -374,7 +413,7 @@ class Session:
         if viewer is None and self.reveal:
             for seat in range(len(board.seats)):
                 own = game.view(seat)
-                for key in ("hands", "hole"):
+                for key in ("hands", "hole", "passes"):  # each seat's private part, from its own view
                     if key in view and isinstance(view[key], list):
                         view[key][seat] = own[key][seat]
         if not board.human_turn:
@@ -386,6 +425,7 @@ class Session:
             "fallback": board.agent_fallback,
             "human_seat": board.human_seat,
             "human_turn": board.human_turn,
+            "waiting": self._waiting(board),
             "current_player": game.current_player,
             "done": game.done,
             "truncated": game.is_truncated,
@@ -411,8 +451,9 @@ class Session:
             "reveal": self.reveal,
             "duel": len(self.boards) == 2,
             "match_over": self.match_over,
-            "match_target": HEARTS_MATCH_POINTS if self.game_id == "hearts" else None,
+            "match_target": MATCH_TARGETS.get(self.game_id),
             "agent": self.agents.status(self.game_id),
+            "agents": self.agents.statuses(self.game_id),
             "boards": [self._board_view(b) for b in self.boards],
         }
 

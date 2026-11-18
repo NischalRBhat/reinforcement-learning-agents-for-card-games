@@ -30,6 +30,7 @@ export function h(tag, props = {}, ...children) {
 }
 
 function spokenName(card) {
+  if (card.suit === "X") return "Joker";
   return `${RANK_NAMES[card.rank] ?? card.rank} of ${SUIT_NAMES[card.suit] ?? card.suit}`;
 }
 
@@ -44,6 +45,7 @@ export function cardEl(card, opts = {}) {
   if (opts.highlight) classes.push("highlight");
   if (opts.className) classes.push(opts.className);
   if (!card) classes.push("back");
+  else if (card.suit === "X") classes.push("joker");
   else {
     classes.push(card.suit === "D" || card.suit === "H" ? "red" : "black");
     if ("JQK".includes(card.rank)) classes.push("face");
@@ -60,7 +62,10 @@ export function cardEl(card, opts = {}) {
     onClick: clickable ? opts.onClick : null,
     dataset: { card: card?.id, action: opts.action },
   });
-  if (card) {
+  if (card?.suit === "X") {
+    const index = (pos) => h("span", { class: `idx ${pos}`, "aria-hidden": "true" }, h("span", { class: "r" }, "JK"), h("span", { class: "s" }, "★"));
+    el.append(index("tl"), h("span", { class: "center", "aria-hidden": "true" }, "★"), index("br"));
+  } else if (card) {
     const symbol = suitSymbol(card.suit);
     const index = (pos) => h("span", { class: `idx ${pos}`, "aria-hidden": "true" },
       h("span", { class: "r" }, card.rank), h("span", { class: "s" }, symbol));

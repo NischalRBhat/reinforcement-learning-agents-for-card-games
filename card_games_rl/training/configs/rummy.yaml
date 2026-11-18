@@ -4,6 +4,9 @@ game: rummy
 # Set algorithm: ppo to train the MaskablePPO agent with the settings below instead.
 algorithm: search
 search_policy: card_games_rl.games.rummy.search:LookaheadPolicy
+variants:
+  counting:   # the card-counting agent: the same search with an opponent model
+    search_policy: card_games_rl.games.rummy.search:CountingLookaheadPolicy
 opponents: pool
 opponent_mix: {recent: 0.45, old: 0.25, heuristic: 0.25, random: 0.05}  # heuristic = the evaluation opponent
 game_kwargs: {}

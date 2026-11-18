@@ -1,0 +1,30 @@
+{
+  "game": "hearts",
+  "variant": "counting",
+  "obs_version": 1,
+  "updated_at": "2026-11-06T20:24:28",
+  "algorithm": "MaskablePPO",
+  "profile": "full",
+  "timesteps": 3500000,
+  "seed": 0,
+  "deterministic": true,
+  "net_arch": [
+    256,
+    256
+  ],
+  "validation": {
+    "metric": "mean_points",
+    "value": 4.6015,
+    "ci95": 0.26928715471814163,
+    "mean_return": 0.08526923076923078,
+    "episodes": 2000,
+    "deals": 500,
+    "higher_is_better": false
+  },
+  "reference": null,
+  "gate": {
+    "threshold": 6.0,
+    "passed": true
+  },
+  "counting_version": 1
+}

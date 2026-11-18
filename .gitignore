@@ -20,8 +20,5 @@ models/**/eval_report.json
 *.log
 
 # Local working files used while building the project (not part of the published repo)
-CLAUDE.md
-.claude/
-docs/PLAN.md
 docs/GAME_RULES.md
 user_prompt.txt

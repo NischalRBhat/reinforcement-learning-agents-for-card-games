@@ -11,6 +11,7 @@ from card_games_rl.agents.registry import write_meta
 from card_games_rl.api.app import create_app
 from card_games_rl.api.sessions import MODES, AgentCache
 from card_games_rl.core import Policy
+from card_games_rl.encoders import variants_for
 from card_games_rl.games import GAME_SPECS, heuristic_policy
 
 
@@ -39,8 +40,8 @@ def spies():
 
 @pytest.fixture(scope="module")
 def client(spies):
-    def loader(game_id, root=None):
-        return spies.setdefault(game_id, SpyPolicy(game_id))
+    def loader(game_id, root=None, variant="base"):
+        return spies.setdefault(game_id if variant == "base" else f"{game_id}-{variant}", SpyPolicy(game_id))
 
     app = create_app(agents=AgentCache(loader=loader))
     return TestClient(app)
@@ -78,13 +79,21 @@ def test_catalog_lists_all_games_with_modes_and_model_status(client):
     games = client.get("/api/games").json()
     assert {g["id"] for g in games} == set(GAME_SPECS)
     for g in games:
-        assert [m["id"] for m in g["modes"]] == list(MODES)
+        counting = "counting" in variants_for(g["id"])
+        competitive_counting = counting and g["category"] == "competitive"
+        assert [m["id"] for m in g["modes"]] == list(MODES[:3]) + (["agent_vs_counting"] if competitive_counting else [])
+        assert ("counting" in g["controllers"]) == counting
+        assert set(g["agents"]) == set(variants_for(g["id"]))
         assert {"trained", "metric", "value", "gate_passed"} <= set(g["agent"])
 
 
 @pytest.mark.parametrize("mode", MODES)
 @pytest.mark.parametrize("game", sorted(GAME_SPECS))
 def test_every_game_and_mode_plays_to_completion(client, game, mode):
+    if mode == "agent_vs_counting" and "counting" not in variants_for(game):
+        response = client.post("/api/sessions", json={"game": game, "mode": mode})
+        assert response.status_code == 422
+        return
     state = create(client, game, mode)
     category = GAME_SPECS[game].category
     if mode == "human_vs_agent" and category in ("solo", "dealer"):
@@ -287,6 +296,25 @@ def test_undo_is_refused_in_duels_and_multiplayer_games(client):
         assert client.post(f"/api/sessions/{state['id']}/undo", json={"board": 0}).status_code == 409
 
 
+@pytest.mark.parametrize("game", ["blackjack", "klondike"])
+def test_duel_agent_waits_until_the_human_deal_is_over(client, game):
+    # Both boards share the shoe or deal, so agent moves would show the human cards to come.
+    state = create(client, game, "human_vs_agent", seed=3)
+    sid = state["id"]
+    first_view = state["boards"][1]["view"]
+    assert state["boards"][1]["waiting"] and not state["boards"][0]["waiting"]
+    state = client.post(f"/api/sessions/{sid}/advance", json={"board": 1, "steps": 50}).json()
+    assert state["advanced"] == [] and not state["boards"][1]["moves"]
+    assert state["boards"][1]["view"] == first_view
+    rng = random.Random(0)
+    while not state["boards"][0]["done"]:   # finish the human deal: the agent may now play
+        legal = state["boards"][0]["view"]["legal_actions"]
+        state = client.post(f"/api/sessions/{sid}/action", json={"board": 0, "action": rng.choice(legal)["action"]}).json()
+    assert not state["boards"][1]["waiting"]
+    state = client.post(f"/api/sessions/{sid}/advance", json={"board": 1, "steps": 1}).json()
+    assert state["boards"][1]["done"] or state["advanced"]
+
+
 def test_klondike_solver_answers_only_after_the_deal(client):
     state = create(client, "klondike", "agent_vs_agent")
     sid = state["id"]
@@ -296,3 +324,35 @@ def test_klondike_solver_answers_only_after_the_deal(client):
     assert solved["boards"][0]["solve_result"]["verdict"] in ("winnable", "not winnable", "unknown")
     hearts = create(client, "hearts")
     assert client.post(f"/api/sessions/{hearts['id']}/solve", json={"board": 0}).status_code == 422
+
+
+def test_hearts_spectators_see_every_pass_after_the_exchange(client):
+    state = create(client, "hearts", "agent_vs_agent", seed=2)
+    sid = state["id"]
+    while state["boards"][0]["view"]["phase"] == "passing":
+        state = client.post(f"/api/sessions/{sid}/advance", json={"steps": 1}).json()
+    passes = state["boards"][0]["view"]["passes"]
+    if passes:  # hands without passing have no summary
+        assert all(p["cards"] and len(p["cards"]) == 3 for p in passes)
+
+
+def test_humans_never_see_which_cards_bots_pass_in_hearts(client):
+    state = create(client, "hearts", "human_vs_agent", seed=6)  # round 0 passes left
+    sid = state["id"]
+    for card in state["boards"][0]["view"]["legal_actions"][:3]:
+        state = client.post(f"/api/sessions/{sid}/action", json={"action": card["action"]}).json()
+    moves = []
+    while state["boards"][0]["view"]["phase"] == "passing":
+        state = client.post(f"/api/sessions/{sid}/advance", json={"steps": 1}).json()
+        moves += state["advanced"]
+    assert len(moves) == 9
+    for move in moves:
+        assert move["label"] == "Pass a card"
+        assert all(t["label"] == "Pass a card" for t in move["top"] or [])
+
+
+def test_web_files_are_revalidated_so_updates_show_up(client):
+    for path in ("/", "/styles.css", "/js/app.js", "/js/renderers/hearts.js"):
+        response = client.get(path)
+        assert response.status_code == 200 and response.headers["cache-control"] == "no-cache", path
+    assert "no-cache" not in client.get("/api/health").headers.get("cache-control", "")

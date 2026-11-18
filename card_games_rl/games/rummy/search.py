@@ -112,3 +112,54 @@ class LookaheadPolicy(Policy):
     def action_probabilities(self, game: Game, player: int) -> dict[int, float]:
         """A deterministic search, not a probability model: the chosen move gets 1."""
         return {self.act(game, player): 1.0}
+
+
+class CountingLookaheadPolicy(LookaheadPolicy):
+    """The look-ahead search plus an opponent model read from the public history.
+
+    * Cards the opponent threw away, or declined when they were on top of the discard
+      pile, are probably not ones it collects: discards that fit them are safer.
+    * Unseen cards that fit what the opponent has picked up are probably in its hand
+      rather than the stock, so the next-draw odds weight them down (and cards that fit
+      what it refused, up).
+    """
+
+    name = "lookahead-counting"
+    REFUSED_RELIEF = 0.5     # danger removed per way a discard fits a card the opponent let go
+    HELD_WEIGHT = 0.6        # relative chance an unseen card fitting the opponent's pick-ups is drawable
+    FREE_WEIGHT = 1.2        # same, for unseen cards fitting what the opponent let go
+
+    def _read_history(self, game: RummyGame, player: int) -> None:
+        opponent = 1 - player
+        let_go, pending = set(), None
+        for seat, action in game.history:
+            if seat == player and action >= DISCARD:
+                pending = action - DISCARD
+            elif seat == opponent:
+                if action >= DISCARD:
+                    let_go.add(action - DISCARD)
+                elif action == DRAW_STOCK and pending is not None:
+                    let_go.add(pending)  # it was on top and the opponent preferred the stock
+                pending = None
+        self._let_go = let_go
+        self._held = {c for c in game.known[player] if c in game.hands[opponent]}
+
+    def act(self, game: Game, player: int) -> int:
+        self._read_history(game, player)
+        return super().act(game, player)
+
+    def danger(self, card: int, opponent_cards: set[int]) -> float:
+        relief = self.REFUSED_RELIEF * LookaheadPolicy.danger(card, self._let_go)
+        return max(0.0, LookaheadPolicy.danger(card, opponent_cards) - relief)
+
+    def hand_value(self, hand: list[int], unseen: list[int]) -> float:
+        if not unseen:
+            return float(solver_for(hand).solve())
+        total = weights = 0.0
+        for card in unseen:
+            weight = (self.HELD_WEIGHT if LookaheadPolicy.danger(card, self._held)
+                      else self.FREE_WEIGHT if LookaheadPolicy.danger(card, self._let_go) else 1.0)
+            after, _ = solver_for(hand + [card]).best_discard()
+            total += weight * (-GOING_OUT_BONUS if after == 0 else after)
+            weights += weight
+        return min(total / weights, float(solver_for(hand).solve()))

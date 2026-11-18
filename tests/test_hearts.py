@@ -109,3 +109,20 @@ def _average_points(seat_policy, hands=300):
 @pytest.mark.slow
 def test_heuristic_beats_random_players():
     assert _average_points(HeuristicPolicy(0)) < _average_points(RandomPolicy(0)) - 1.5
+
+
+def test_pass_summary_shows_only_what_each_player_knows():
+    from card_games_rl.games import make_game
+
+    game = make_game("hearts", seed=4, pass_direction=0)  # pass left: seat p gives to p + 1
+    assert game.view(0)["passes"] is None
+    while game.passing:
+        game.step(game.legal_actions()[0])
+    passes = game.view(0)["passes"]
+    assert [(p["from"], p["to"]) for p in passes] == [(0, 1), (1, 2), (2, 3), (3, 0)]
+    assert passes[0]["cards"] and passes[3]["cards"]           # what seat 0 gave and received
+    assert passes[1]["cards"] is None and passes[2]["cards"] is None and passes[1]["count"] == 3
+    assert [c["id"] for c in passes[3]["cards"]] == [c["id"] for c in game.view(0)["received"]]
+
+    no_pass = make_game("hearts", seed=4, pass_direction=3)
+    assert no_pass.view(0)["passes"] is None

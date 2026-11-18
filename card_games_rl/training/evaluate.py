@@ -2,6 +2,7 @@
 
     python -m card_games_rl.training.evaluate --all
     python -m card_games_rl.training.evaluate --game hearts --episodes 2000
+    python -m card_games_rl.training.evaluate --all --variant counting   # + head-to-head vs the base agent
 
 Writes ``models/<game>/eval_report.{json,md}`` and prints a summary table.
 """
@@ -38,6 +39,8 @@ METRICS: dict[str, Metric] = {
     "hearts": Metric("mean_points", lambda g, s: float(g.hand_points()[s]), higher_is_better=False),
     # Share of being the Donkey (players tied for most cards at a forced stop share it); fair share 0.25.
     "donkey": Metric("donkey_rate", lambda g, s: 1 / len(g.losers) if s in g.losers else 0.0, higher_is_better=False),
+    # Partnership points per hand above the other side (System vs System = 0).
+    "canasta": Metric("point_diff", lambda g, s: float(g.hand_scores[g.team(s)] - g.hand_scores[1 - g.team(s)])),
 }
 
 BASELINES: dict[str, list[str]] = {
@@ -48,6 +51,7 @@ BASELINES: dict[str, list[str]] = {
     "bluff": ["heuristic", "random"],
     "hearts": ["heuristic", "random"],
     "donkey": ["heuristic", "random"],
+    "canasta": ["heuristic", "random"],
 }
 
 
@@ -80,9 +84,11 @@ def play(game_id: str, learner: Policy, opponent: Policy | None, episodes: int,
     for episode in range(episodes):
         deal, seat = divmod(episode, seats)
         game.reset(seed_offset + deal)
+        # Partnership games: the learner plays both seats of its side.
+        learner_seats = set(game.team_seats(seat)) if hasattr(game, "team_seats") else {seat}
         while not game.done:
             player = game.current_player
-            policy = learner if player == seat else opponent
+            policy = learner if player in learner_seats else opponent
             game.step(policy.act(game, player))
         if seat == 0:
             deal_values.append([])
@@ -97,6 +103,41 @@ def play(game_id: str, learner: Policy, opponent: Policy | None, episodes: int,
         "mean_return": sum(returns) / episodes, "episodes": episodes, "deals": n,
         "higher_is_better": metric.higher_is_better, "per_deal": per_deal,
     }
+
+
+def head_to_head(game_id: str, agent_a: Policy, agent_b: Policy, deals: int,
+                 seed_offset: int = TEST_SEEDS) -> dict[str, Any]:
+    """Agent A against agent B on duplicate deals.
+
+    Two players: each deal is played twice, A in seat 0 then seat 1. Four players: A
+    takes two opposite seats and B the other two, then the seats swap. Card luck
+    cancels out, so the per-deal difference (A minus B, in the game's metric) measures
+    which agent is stronger. ``a_better`` says whether that difference favours A.
+    """
+    metric = METRICS[game_id]
+    game = make_game(game_id)
+    seats = game.num_players
+    arrangements = [[0], [1]] if seats == 2 else [[0, 2], [1, 3]]
+    a_values, b_values, diffs = [], [], []
+    for deal in range(deals):
+        a_total = b_total = 0.0
+        for a_seats in arrangements:
+            game.reset(seed_offset + deal)
+            while not game.done:
+                player = game.current_player
+                game.step((agent_a if player in a_seats else agent_b).act(game, player))
+            a_total += sum(metric.value(game, s) for s in a_seats) / len(a_seats)
+            b_total += sum(metric.value(game, s) for s in range(seats) if s not in a_seats) / (seats - len(a_seats))
+        a_values.append(a_total / len(arrangements))
+        b_values.append(b_total / len(arrangements))
+        diffs.append(a_values[-1] - b_values[-1])
+    n = len(diffs)
+    mean = sum(diffs) / n
+    std = math.sqrt(sum((d - mean) ** 2 for d in diffs) / max(1, n - 1))
+    sign = 1 if metric.higher_is_better else -1
+    return {"metric": metric.name, "higher_is_better": metric.higher_is_better, "deals": n,
+            "a": sum(a_values) / n, "b": sum(b_values) / n, "difference": mean, "ci95": 1.96 * std / math.sqrt(n),
+            "a_better": sign * mean > 0}
 
 
 def klondike_solvability(deals: int, seed_offset: int = TEST_SEEDS, max_nodes: int = 30_000) -> list[str]:
@@ -175,6 +216,13 @@ def report_markdown(report: dict[str, Any]) -> str:
                   f"(proven winnable: {first['proven_winnable_share']:.1%})", "",
                   "| Player | Win rate on proven-winnable deals |", "|---|---|"]
         lines += [f"| {name} | {s['win_rate_on_winnable']:.4f} |" for name, s in report["solvability"].items()]
+    if "head_to_head" in report:
+        h = report["head_to_head"]
+        lines += ["", f"## Head-to-head: this agent vs the base agent ({h['deals']} duplicate deals)", "",
+                  f"| | {h['metric']} |", "|---|---|", f"| this agent | {h['a']:.4f} |", f"| base agent | {h['b']:.4f} |",
+                  f"| difference | {h['difference']:+.4f} ± {h['ci95']:.4f} |", "",
+                  f"Better: **{'this agent' if h['a_better'] else 'base agent'}**"
+                  + ("" if abs(h['difference']) > h['ci95'] else " (within the margin: not a clear difference)")]
     gate = report["gate"]
     lines += ["", f"**Gate:** {json.dumps({k: v for k, v in gate.items() if k != 'passed'})} → "
               f"{'PASSED' if gate['passed'] else 'NOT MET'}"]
@@ -187,27 +235,44 @@ def main() -> None:
     group.add_argument("--game", choices=sorted(GAME_SPECS))
     group.add_argument("--all", action="store_true")
     parser.add_argument("--episodes", type=int, default=None, help="Default: the full profile's eval_episodes")
+    parser.add_argument("--variant", default="base", choices=["base", "counting"],
+                        help="Which agents to evaluate; counting also plays them head-to-head against the base agents")
     args = parser.parse_args()
 
     from card_games_rl.agents.registry import load_agent, model_dir
+    from card_games_rl.encoders import BASE, agent_key, variants_for
 
-    rows = []
-    for game_id in (sorted(GAME_SPECS) if args.all else [args.game]):
-        agent = load_agent(game_id)
+    games = sorted(GAME_SPECS) if args.all else [args.game]
+    games = [g for g in games if args.variant in variants_for(g)]
+    rows, duels = [], []
+    for game_id in games:
+        key = agent_key(game_id, args.variant)
+        agent = load_agent(game_id, variant=args.variant)
         if agent is None:
-            print(f"{game_id}: no compatible trained model in models/{game_id}/ - train it first")
+            print(f"{key}: no compatible trained model in models/{key}/ - train it first")
             continue
         full = load_config(game_id, "full")["run"]
         episodes = args.episodes or full.get("test_episodes", full["eval_episodes"])
-        print(f"{game_id}: evaluating over {episodes} episodes per matchup...", flush=True)
+        print(f"{key}: evaluating over {episodes} episodes per matchup...", flush=True)
         report = evaluate_agent(game_id, agent, episodes)
-        out = model_dir(game_id)
+        base = load_agent(game_id) if args.variant != BASE else None
+        if base is not None:
+            deals = max(1, episodes // GAME_SPECS[game_id].max_players)
+            print(f"{key}: head-to-head against the base agent over {deals} duplicate deals...", flush=True)
+            report["head_to_head"] = head_to_head(game_id, agent, base, deals)
+            h = report["head_to_head"]
+            duels.append(f"| {game_id} | {h['metric']} | {h['a']:.4f} | {h['b']:.4f} | {h['difference']:+.4f} +/-{h['ci95']:.4f} |"
+                         f" {'counting' if h['a_better'] else 'base'}{'' if abs(h['difference']) > h['ci95'] else ' (not clear)'} |")
+        out = model_dir(game_id, variant=args.variant)
         (out / "eval_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
         (out / "eval_report.md").write_text(report_markdown(report), encoding="utf-8")
         p = report["primary"]
-        rows.append(f"| {game_id} | {p['metric']} | {p['value']:.4f} +/-{p['ci95']:.4f} | {'PASSED' if report['gate']['passed'] else 'NOT MET'} |")
+        rows.append(f"| {key} | {p['metric']} | {p['value']:.4f} +/-{p['ci95']:.4f} | {'PASSED' if report['gate']['passed'] else 'NOT MET'} |")
     if rows:
-        print("\n| Game | Metric | Agent | Gate |\n|---|---|---|---|\n" + "\n".join(rows))
+        print("\n| Agent | Metric | Agent vs System | Gate |\n|---|---|---|---|\n" + "\n".join(rows))
+    if duels:
+        print("\n| Game | Metric | Counting agent | Base agent | Difference | Better |\n|---|---|---|---|---|---|\n"
+              + "\n".join(duels))
 
 
 if __name__ == "__main__":
