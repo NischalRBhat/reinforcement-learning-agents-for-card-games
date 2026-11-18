@@ -46,7 +46,7 @@ class SingleAgentEnv(gym.Env):
         # random legal move) exists only for unmasked tools such as check_env.
         self.illegal_action_mode = "raise"
         self.observation_space = spaces.Box(0.0, 1.0, shape=(self.encoder.size,), dtype=np.float32)
-        self.action_space = spaces.Discrete(self.game.num_actions)
+        self.action_space = spaces.Discrete(self.encoder.num_actions)
         self.seat = 0
         self.opponents = {}
         self._score = 0.0
@@ -93,11 +93,11 @@ class SingleAgentEnv(gym.Env):
 
     def step(self, action):
         action = int(action)
-        if not self.game.action_mask()[action]:
+        if not self.action_masks()[action]:
             if self.illegal_action_mode == "raise":
                 raise ValueError(f"{self.game_id}: illegal action {action}; use action masks")
-            action = int(self.np_random.choice(self.game.legal_actions()))
-        self.game.step(action)
+            action = int(self.np_random.choice(self.encoder.legal(self.game)))
+        self.game.step(self.encoder.to_game(self.game, action))
         self._advance_opponents()
         score, potential = self.game.score(self.seat), self._phi()
         reward = (score - self._score) + self.shaping_weight * (potential - self._potential) - self.game.step_cost
@@ -115,4 +115,4 @@ class SingleAgentEnv(gym.Env):
         return self._observe(), float(reward), terminated, truncated, info
 
     def action_masks(self) -> np.ndarray:
-        return self.game.action_mask()
+        return self.encoder.mask(self.game)

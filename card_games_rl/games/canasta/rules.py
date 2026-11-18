@@ -452,13 +452,14 @@ class CanastaGame(Game):
     def _progress(self, team: int) -> float:
         melded = sum(VALUES[kind_of(c)] for m in self.melds[team].values() for part in m.values() for c in part)
         bonus = sum(NATURAL_CANASTA if kind == "natural" else MIXED_CANASTA for kind in self.canastas(team))
-        growing = sum(min(self.meld_size(m), CANASTA_SIZE - 1) * 30 for m in self.melds[team].values()
-                      if self.meld_size(m) < CANASTA_SIZE)
         reds = sum(len(self.red_threes[p]) for p in self.team_seats(team)) * 100
-        return melded + bonus + growing + (reds if self.melds[team] else 0)
+        # No credit for melds still short of a canasta: it taught early agents to lay cards
+        # down too soon, which shows the opponents your ranks and spends the pairs you
+        # need to take the pile.
+        return melded + bonus + (reds if self.melds[team] else 0)
 
     def potential(self, player: int) -> float:
-        """Public progress (melds, canastas on the way, red threes) against the other side."""
+        """Public progress (melded cards, canastas, red threes) against the other side."""
         team = self.team(player)
         return 0.5 * (self._progress(team) - self._progress(1 - team)) / SCORE_SCALE
 

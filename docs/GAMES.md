@@ -13,7 +13,7 @@ The rules engines in `card_games_rl/games/<game>/rules.py` are the source of tru
 | 5 | Bluff | 4 | Competitive, deception | Reinforcement learning (PPO, self-play) |
 | 6 | Hearts | 4 | Competitive, trick-taking | Reinforcement learning (PPO, self-play) |
 | 7 | Donkey | 4 | Competitive, shedding | Reinforcement learning (PPO, self-play) |
-| 8 | Canasta | 4 (2 partnerships) | Competitive, partnership melding | Reinforcement learning (PPO, self-play, card counting) |
+| 8 | Canasta | 4 (2 partnerships) | Competitive, partnership melding | Reinforcement learning (PPO over strategic choices, card counting) |
 
 **Play modes**, available for every game:
 
@@ -296,7 +296,7 @@ Click three cards to pass, then click a legal card to play; illegal cards are di
   - Takes the pile when it has four or more cards or extends a meld.
   - Melds natural cards whenever possible, and spends wild cards only to complete a canasta, reach the opening minimum or go out.
   - Discards a black three first, never a rank the opponents could add to an unfrozen pile, and throws a wild card only to freeze a big pile.
-- **Agent:** PPO with self-play: one policy plays all four seats, so partners share a brain. Its observation includes the hand, every meld on the table, the pile (contents, frozen or blocked), card counts and the match score. It also includes **card counting from the start**: unseen copies of each kind, the cards each player is known to hold from pile pickups, and for each possible discard the chance the next opponent could take the pile with it. The reward is the side's score difference for the hand, plus potential-based shaping for melded points and canastas in progress. Evaluation plays the agent in both seats of a side.
+- **Agent:** PPO that makes the **strategic choices** while the System bot's rules handle the details. Each turn it decides whether to draw or take the pile, whether to meld the System way, meld with wild cards to build a canasta, or hold cards back, and what to discard. It starts as an exact copy of the System bot and learns from there, playing with and against System bots and its own past versions. (The first version chose every individual meld and wild card itself, about 150 decisions per hand, and lost 121 points per hand to the System bot.) Its observation includes the hand, every meld on the table, the pile (contents, frozen or blocked), card counts and the match score. It also includes **card counting from the start**: unseen copies of each kind, the cards each player is known to hold from pile pickups, and for each possible discard the chance the next opponent could take the pile with it. It also sees what the System bot would do in its place. The reward is the side's score difference for the hand, plus potential-based shaping for melded points and completed canastas. Evaluation plays the agent in both seats of a side.
 - **Result:** not trained yet. The target is +150 points per hand above a System partnership; the System partnership beats random players by more than 300 points per hand.
 
 ---

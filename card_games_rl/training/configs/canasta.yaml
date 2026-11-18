@@ -1,20 +1,23 @@
-# Four-player partnership Canasta: self-play, team score difference + meld progress potential
-# (docs/ENV_DESIGN.md §10). The learner's partner and opponents come from the self-play pool.
+# Four-player partnership Canasta (docs/ENV_DESIGN.md §10). The agent chooses planner
+# actions (games/canasta/plan.py): draw or take the pile, meld the System way or with wild
+# cards, or hold back and discard. It starts as a copy of the System bot and learns from
+# there: half its opponents and partners are System bots (the evaluation opponent), and
+# PPO steps are small so the copied play is refined rather than overwritten.
 game: canasta
 opponents: pool
-opponent_mix: {recent: 0.45, old: 0.25, heuristic: 0.25, random: 0.05}  # heuristic = the evaluation opponent
+opponent_mix: {recent: 0.3, old: 0.2, heuristic: 0.5, random: 0.0}
 game_kwargs: {}
 policy:
-  net_arch: [512, 512]
+  net_arch: [256, 256]
 ppo:
-  learning_rate: 2.5e-4
+  learning_rate: 1.0e-4
   n_steps: 1024
   batch_size: 512
-  n_epochs: 8
+  n_epochs: 4
   gamma: 0.999
   gae_lambda: 0.95
-  clip_range: 0.2
-  ent_coef: 0.01
+  clip_range: 0.1
+  ent_coef: 0.003
 evaluation:
   deterministic: true
   metric: point_diff

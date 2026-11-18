@@ -35,11 +35,11 @@ def read_meta(game_id: str, root: Path | None = None, variant: str = BASE) -> di
 def write_meta(game_id: str, data: dict[str, Any], root: Path | None = None, variant: str = BASE) -> None:
     path = meta_path(game_id, root, variant)
     path.parent.mkdir(parents=True, exist_ok=True)
-    obs_version, counting_version = get_encoder(game_id, variant).version
+    obs_version, features_version = get_encoder(game_id, variant).version
     payload = {"game": game_id, "variant": variant, "obs_version": obs_version,
                "updated_at": datetime.now().isoformat(timespec="seconds"), **data}
-    if counting_version:
-        payload["counting_version"] = counting_version
+    if features_version:  # counting features or planner actions
+        payload["features_version"] = features_version
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
@@ -58,11 +58,12 @@ def best_model_path(game_id: str, root: Path | None = None, variant: str = BASE)
     path = model_dir(game_id, root, variant) / ARTIFACTS.get(meta.get("algorithm", "MaskablePPO"), "best.zip")
     if not path.exists():
         return None
-    obs_version, counting_version = get_encoder(game_id, variant).version
-    trained = (meta.get("obs_version"), meta.get("counting_version", 0))
-    if trained != (obs_version, counting_version):
+    current = get_encoder(game_id, variant).version
+    # "counting_version" is the older name of "features_version".
+    trained = (meta.get("obs_version"), meta.get("features_version", meta.get("counting_version", 0)))
+    if trained != current:
         warnings.warn(f"{agent_key(game_id, variant)}: model trained on observation v{trained}, "
-                      f"engine is v{(obs_version, counting_version)}; retrain")
+                      f"engine is v{current}; retrain")
         return None
     return path
 
@@ -88,5 +89,4 @@ def load_agent(game_id: str, deterministic: bool | None = None, root: Path | Non
         return CFRPolicy(path, deterministic=deterministic)
     from .model_policy import ModelPolicy
 
-    return ModelPolicy(path, deterministic=deterministic,
-                       encoder=get_encoder(game_id, variant) if variant != BASE else None)
+    return ModelPolicy(path, deterministic=deterministic, encoder=get_encoder(game_id, variant))

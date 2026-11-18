@@ -8,7 +8,8 @@ import numpy as np
 import torch
 
 from card_games_rl.core import Game, Policy
-from card_games_rl.core.policy import sample_legal  # noqa: F401  (re-exported)
+from card_games_rl.core.policy import engine_probabilities, sample_legal  # noqa: F401  (re-exported)
+from card_games_rl.encoders import get_encoder
 
 
 class ModelPolicy(Policy):
@@ -24,16 +25,21 @@ class ModelPolicy(Policy):
         self.model = model
         self.deterministic = deterministic
         self.rng = random.Random(seed)
-        self.encoder = encoder  # None: the engine's own observation
+        self.encoder = encoder  # None: the game's base encoder
 
     @classmethod
     def from_model(cls, model, deterministic: bool = True, encoder=None) -> "ModelPolicy":
         """Wrap a live (training) model without saving it first."""
         return cls(model=model, deterministic=deterministic, encoder=encoder)
 
+    def _encoder(self, game: Game):
+        return self.encoder or get_encoder(game.game_id)
+
     def probabilities(self, game: Game, player: int) -> np.ndarray:
-        observation = self.encoder(game, player) if self.encoder else np.clip(game.observation(player), 0.0, 1.0)
-        mask = game.action_mask()
+        """Probabilities over the agent's own actions (planner actions for planned games)."""
+        encoder = self._encoder(game)
+        observation = encoder(game, player)
+        mask = encoder.mask(game)
         obs_tensor, _ = self.model.policy.obs_to_tensor(observation)
         with torch.no_grad():
             distribution = self.model.policy.get_distribution(obs_tensor, action_masks=mask[None, :])
@@ -44,10 +50,9 @@ class ModelPolicy(Policy):
 
     def act(self, game: Game, player: int) -> int:
         probs = self.probabilities(game, player)
-        if self.deterministic:
-            return int(np.argmax(probs))
-        return sample_legal(probs, self.rng)
+        action = int(np.argmax(probs)) if self.deterministic else sample_legal(probs, self.rng)
+        return self._encoder(game).to_game(game, action)
 
     def action_probabilities(self, game: Game, player: int) -> dict[int, float]:
-        probs = self.probabilities(game, player)
-        return {int(a): float(probs[a]) for a in np.flatnonzero(probs > 0)}
+        """Probabilities of engine actions (planner actions are translated)."""
+        return engine_probabilities(self._encoder(game), game, self.probabilities(game, player))

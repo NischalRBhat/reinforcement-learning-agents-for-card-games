@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import random
 
+import numpy as np
 import pytest
 
 from card_games_rl.core.cards import make_card
 from card_games_rl.games import heuristic_policy, make_game
 from card_games_rl.games.canasta.rules import (BLACK3, DISCARD_BASE, DRAW, JOKER, RED3, TAKE_ADD, TAKE_MIXED,
-                                               TAKE_PAIR, TWO, CanastaGame, kind_of, meld_action, minimum_for)
+                                               TAKE_PAIR, TWO, CanastaGame, decode_meld, kind_of, meld_action,
+                                               minimum_for)
 
 
 class Cards:
@@ -206,6 +208,40 @@ def test_observation_has_counting_features_without_hidden_cards():
         game.hands[q], hidden = keep + hidden[:take], hidden[take:]
     game.invalidate()
     assert (game.observation(player) == before).all()
+
+
+def test_planner_covers_every_turn_and_reproduces_the_system_bot():
+    from card_games_rl.encoders import get_encoder
+    from card_games_rl.games.canasta import plan
+
+    encoder = get_encoder("canasta")
+    assert encoder.planned and encoder.num_actions == plan.NUM_PLAN_ACTIONS
+    bot = heuristic_policy("canasta", 0)
+    for seed in range(15):
+        rng = random.Random(seed)
+        game = make_game("canasta", seed=seed)
+        while not game.done:
+            player = game.current_player
+            options = plan.legal(game)
+            assert options and list(np.flatnonzero(plan.mask(game))) == sorted(options)
+            assert all(encoder.to_game(game, a) in game.legal_actions() for a in options)
+            teacher = bot.act(game, player)
+            assert encoder.to_game(game, encoder.from_game(game, teacher)) == teacher   # copying is exact
+            features = encoder(game, player)
+            assert features.shape == (encoder.size,) and features.min() >= 0 and features.max() <= 1
+            game.step(encoder.to_game(game, rng.choice(options)) if player % 2 == 0 else teacher)
+
+
+def test_planner_lets_the_agent_hold_back_melds():
+    from card_games_rl.games.canasta import plan
+
+    c = Cards()
+    game = rig({0: c.take(9, 3) + c.take(JOKER, 1) + c.take(6, 2) + c.take(7, 1)})
+    options = plan.legal(game)
+    assert plan.MELD in options and plan.MELD_WILD in options
+    assert plan.DISCARD + 7 in options                       # discard instead of melding the 9s
+    assert decode_meld(plan.to_game(game, plan.MELD)) == (9, 3, 0, 0)
+    assert decode_meld(plan.to_game(game, plan.MELD_WILD))[2] == 1
 
 
 @pytest.mark.parametrize("seed", range(3))

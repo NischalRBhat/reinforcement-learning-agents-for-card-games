@@ -17,7 +17,7 @@ Run these from the project root in PowerShell. They use the project venv directl
 
 Add `--games klondike poker` (for example) to train only some games.
 
-Canasta is the slowest game to train (long hands, four seats), so give it its own longer run:
+Canasta is the slowest game to train (long hands, four seats), so give it its own 6-hour run. The agent starts as an exact copy of the System bot, so every evaluation from the first one is at least level with it:
 
 ```powershell
 .\.venv\Scripts\python.exe -m card_games_rl.training.train --game canasta --profile full --time-budget 6h
@@ -31,7 +31,7 @@ Each game's config chooses its method (`algorithm` in `training/configs/<game>.y
 | Klondike | MaskablePPO | warm start from the System bot, then PPO | GPU if available |
 | Bluff, Hearts, Donkey | MaskablePPO self-play | warm start, then PPO against a pool of past versions plus System bots | CPU |
 | Poker | **Monte Carlo CFR** | 4 worker processes; merged, evaluated against the System bot and saved every 20 minutes | CPU |
-| Canasta | MaskablePPO self-play | warm start, then PPO; partners share one policy; card counting built into the observation | CPU |
+| Canasta | MaskablePPO over planner actions | exact copy of the System bot, then careful PPO against System bots (50%) and past versions; card counting and the bot's suggestion in the observation | CPU |
 | Rummy | **look-ahead search** | no weights: validated against the System bot and registered in about 3 minutes | CPU |
 
 For the PPO games:

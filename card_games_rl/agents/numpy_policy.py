@@ -13,7 +13,8 @@ from pathlib import Path
 import numpy as np
 
 from card_games_rl.core import Game, Policy
-from card_games_rl.core.policy import sample_legal
+from card_games_rl.core.policy import engine_probabilities, sample_legal
+from card_games_rl.encoders import get_encoder
 
 
 def export_policy(model, path: str | Path) -> None:
@@ -53,14 +54,18 @@ class NumpyPolicy(Policy):
             self.activation = self._ACTIVATIONS[str(data["activation"])]
         self.deterministic = deterministic
         self.rng = random.Random(seed)
-        self.encoder = encoder  # None: the engine's own observation
+        self.encoder = encoder  # None: the game's base encoder
+
+    def _encoder(self, game: Game):
+        return self.encoder or get_encoder(game.game_id)
 
     def probabilities(self, game: Game, player: int) -> np.ndarray:
-        h = self.encoder(game, player) if self.encoder else np.clip(game.observation(player), 0.0, 1.0).astype(np.float32)
+        encoder = self._encoder(game)
+        h = encoder(game, player)
         for weight, bias in self.layers:
             h = self.activation(weight @ h + bias)
         logits = (self.head[0] @ h + self.head[1]).astype(np.float64)
-        mask = game.action_mask()
+        mask = encoder.mask(game)
         logits = np.where(mask, logits, -np.inf)
         logits -= logits.max()
         probs = np.exp(logits)
@@ -68,8 +73,9 @@ class NumpyPolicy(Policy):
 
     def act(self, game: Game, player: int) -> int:
         probs = self.probabilities(game, player)
-        return int(np.argmax(probs)) if self.deterministic else sample_legal(probs, self.rng)
+        action = int(np.argmax(probs)) if self.deterministic else sample_legal(probs, self.rng)
+        return self._encoder(game).to_game(game, action)
 
     def action_probabilities(self, game: Game, player: int) -> dict[int, float]:
-        probs = self.probabilities(game, player)
-        return {int(a): float(probs[a]) for a in np.flatnonzero(probs > 0)}
+        """Probabilities of engine actions (planner actions are translated)."""
+        return engine_probabilities(self._encoder(game), game, self.probabilities(game, player))

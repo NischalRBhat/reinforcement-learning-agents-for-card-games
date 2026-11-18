@@ -134,10 +134,10 @@ def test_counting_meta_is_versioned_and_kept_apart(tmp_path):
     write_meta("hearts", {"algorithm": "MaskablePPO"}, root=tmp_path, variant=COUNTING)
     (model_dir("hearts", tmp_path, COUNTING) / "best.zip").write_bytes(b"x")
     meta = read_meta("hearts", tmp_path, COUNTING)
-    assert meta["variant"] == COUNTING and meta["counting_version"] == get_encoder("hearts", COUNTING).version[1]
+    assert meta["variant"] == COUNTING and meta["features_version"] == get_encoder("hearts", COUNTING).version[1]
     assert read_meta("hearts", tmp_path) is None                   # the base agent's folder is untouched
     assert best_model_path("hearts", tmp_path, COUNTING) is not None
-    meta["counting_version"] = 999                                  # features changed since training
+    meta["features_version"] = 999                                    # features changed since training
     (model_dir("hearts", tmp_path, COUNTING) / "meta.json").write_text(__import__("json").dumps(meta))
     with pytest.warns(UserWarning):
         assert best_model_path("hearts", tmp_path, COUNTING) is None

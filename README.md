@@ -15,7 +15,7 @@ Each game has a hand-written **System** bot as a baseline and a trained **agent*
 | Bluff | 4 | PPO self-play | 89.9% ± 1.8 wins vs 3 System bots (fair share 25%) | ✅ ≥ 30% |
 | Hearts | 4 | PPO self-play | 5.55 ± 0.32 points per hand vs 3 System bots (bot vs itself 6.79) | ✅ ≤ 6.0 |
 | Donkey | 4 | PPO self-play | the Donkey in 16.5% ± 1.5 of games vs 3 System bots (fair share 25%) | ✅ ≤ 18% |
-| Canasta | 4 (partnerships) | PPO self-play + card counting | not trained yet | target +150 points/hand |
+| Canasta | 4 (partnerships) | PPO over strategic choices + card counting | retraining | target +150 points/hand |
 
 These come from `evaluate --all` on test deals that training never saw. Multi-player games use **duplicate deals**: each deal is replayed with the agent in every seat, so the luck of the cards cancels out. Poker scored +25.9 bb/100 on its validation hands during training. Its test result is lower and very noisy (hands in which both players randomise vary a lot), so it needs a longer run or more test hands to be settled. Klondike's agent still plays worse than the System bot.
 

@@ -23,6 +23,16 @@ def sample_legal(probs: np.ndarray, rng: random.Random) -> int:
     return int(legal[min(index, len(legal) - 1)])
 
 
+def engine_probabilities(encoder, game: Game, probs: np.ndarray) -> dict[int, float]:
+    """An agent's probabilities over its own actions, as engine actions (planner actions
+    are translated; two that map to the same engine move are added up)."""
+    out: dict[int, float] = {}
+    for action in np.flatnonzero(probs > 0):
+        engine = int(encoder.to_game(game, int(action)))
+        out[engine] = out.get(engine, 0.0) + float(probs[action])
+    return out
+
+
 class Policy(ABC):
     name: str = "policy"
 

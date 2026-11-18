@@ -520,6 +520,23 @@ Ids 0..107: `deck * 52 + card` for the two decks, 104..107 jokers. Melding and d
 
 Masks enforce every rule: meld shape, wild limits, black threes only when going out, no emptying the hand without a canasta, and the opening minimum. An opening meld may be laid in several steps, but each step must keep the minimum reachable from the hand (a greedy upper bound), and discarding is blocked until it is reached.
 
+### Agent actions: planner (21, `games/canasta/plan.py`, `PLAN_VERSION = 1`)
+With the engine's actions a player makes about 150 decisions per hand, and the first agent (PPO on engine actions) lost 121 ± 42 points per hand to a System partnership: even its imitation of the System bot played far worse than the bot. The agent therefore chooses *planner actions*, and the System bot's meld rules fill in the details:
+
+| Plan action | Engine action |
+|---|---|
+| 0–3 | draw / take the pile, unchanged |
+| 4 `MELD` | the System bot's meld now (naturals; wild cards only to open, complete a canasta or go out) |
+| 5 `MELD_WILD` | the meld with wild cards that grows a meld furthest (a canasta first, then size, 2s before jokers) |
+| 6–20 | discard one card of a kind, unchanged |
+
+- Choosing a discard while melds are possible is how the agent holds cards back.
+- Every engine move stays reachable: any natural meld is a positive System meld and any meld with wild cards is a `MELD_WILD` candidate.
+- The System bot's own moves translate exactly, so the warm start copies it perfectly (imitation accuracy 1.000, and the copy scores 0 against a System partnership).
+- About 23 decisions per hand for the learner.
+- The encoder (`card_games_rl/encoders.py`) owns the translation: policies return engine actions, so opponents, the API and evaluation are unchanged.
+- **Planner features** (48, appended to the observation): the System bot's choice now (one-hot over the 21 plan actions); for `MELD` and `MELD_WILD`: available, cards added, wild cards used, new meld, makes a canasta, goes out; the System bot's discard choice (one-hot over 15 kinds).
+
 ### Observation (239 floats, `OBS_VERSION = 1`)
 - Hand: count per kind.
 - Melds of both sides per target: naturals, wilds, canasta, natural canasta.
@@ -537,10 +554,12 @@ Masks enforce every rule: meld shape, wild limits, black threes only when going 
 | Component | Value |
 |---|---|
 | S: end of hand | (own side's hand score − other side's) / 2000 for both partners (zero-sum) |
-| Φ: public progress | 0.5 · (progress(own side) − progress(other side)) / 2000, where progress counts melded card values, canasta bonuses, 30 per card in melds still growing towards a canasta, and red threes once the side has melded (λ = 1) |
+| Φ: public progress | 0.5 · (progress(own side) − progress(other side)) / 2000, where progress counts melded card values, canasta bonuses, and red threes once the side has melded (λ = 1) |
+
+Earlier versions also credited 30 points per card in melds still short of a canasta. That was removed: it pushed the agent to lay cards down early, which shows the opponents your ranks and spends the pairs needed to take the pile.
 
 ### Agent and evaluation
-- **Training:** MaskablePPO with self-play against a pool of past versions plus System bots. The learner's partner comes from the same pool, and the behaviour-cloning warm start uses the System bot.
+- **Training:** MaskablePPO over planner actions, warm-started as an exact copy of the System bot (policy and value head). Half of the partners and opponents are System bots (the evaluation opponent), the rest past versions; no random players. Small, careful PPO steps (learning rate 1e-4, clip 0.1, 4 epochs, entropy 0.003) refine the copied play instead of overwriting it. Network 256×256. Budget: 6 hours.
 - **Evaluation:** the agent plays both seats of a side (`team_seats`) against a System partnership on duplicate deals.
 - **Metric:** points per hand above the other side.
 - **Gate:** ≥ +150 points per hand.
